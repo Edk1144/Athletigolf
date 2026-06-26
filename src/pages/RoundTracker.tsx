@@ -66,6 +66,10 @@ export default function RoundTracker() {
     const fairwayHoles = completed.filter((hole) => hole.par !== 3);
     const fairwaysHit = fairwayHoles.filter((hole) => hole.fairway === "hit").length;
     const girs = completed.filter((hole) => hole.gir).length;
+    const scrambleChances = completed.filter((hole) => !hole.gir);
+    const successfulScrambles = scrambleChances.filter(
+      (hole) => Number(hole.score) <= hole.par
+    ).length;
     const penaltyShots = completed.reduce(
       (sum, hole) => sum + parseStat(hole.penaltyShots),
       0
@@ -96,12 +100,17 @@ export default function RoundTracker() {
       penaltyShots,
       chipShots,
       greensideBunkerShots,
+      scrambleChances: scrambleChances.length,
+      successfulScrambles,
       frontNine,
       backNine,
       fairwayPercent: fairwayHoles.length
         ? Math.round((fairwaysHit / fairwayHoles.length) * 100)
         : 0,
       girPercent: completed.length ? Math.round((girs / completed.length) * 100) : 0,
+      scramblePercent: scrambleChances.length
+        ? Math.round((successfulScrambles / scrambleChances.length) * 100)
+        : null,
     };
   }, [holes]);
 
@@ -137,7 +146,7 @@ export default function RoundTracker() {
         greenside_bunker_shots: stats.greensideBunkerShots,
         holes_played: holesPlayed,
         tee_colour: teeColour || null,
-        scramble_percentage: null,
+        scramble_percentage: stats.scramblePercent,
         is_competition: competition,
         notes: notes || null,
       })
@@ -290,8 +299,8 @@ export default function RoundTracker() {
               <StatCard label="Putts" value={stats.totalPutts || "-"} tone="bg-white" />
               <StatCard label="FIR" value={`${stats.fairwayPercent}%`} tone="bg-white" />
               <StatCard label="GIR" value={`${stats.girPercent}%`} tone="bg-white" />
+              <StatCard label="Scramble" value={stats.scramblePercent === null ? "-" : `${stats.scramblePercent}%`} tone="bg-white" />
               <StatCard label="Penalties" value={stats.penaltyShots} tone="bg-white" />
-              <StatCard label="Bunkers" value={stats.greensideBunkerShots} tone="bg-white" />
             </section>
 
             {step === "review" && (

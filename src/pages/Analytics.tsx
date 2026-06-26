@@ -3,11 +3,19 @@ import { Link } from "wouter";
 import { ArrowUpRight, BarChart3, Dumbbell, Flag, Target } from "lucide-react";
 import { Button, EmptyState, SectionTitle, Surface } from "@/components/ui";
 import { supabase } from "@/lib/supabase";
-import { formatAverage, formatPercent, getGolfStats } from "@/lib/golfStats";
-import type { Round, Workout } from "@/lib/types";
+import {
+  formatAverage,
+  formatControlPercent,
+  formatPercent,
+  getGolfStats,
+  getShortGameStats,
+  lowerIsBetterControl,
+} from "@/lib/golfStats";
+import type { Round, RoundHole, Workout } from "@/lib/types";
 
 export default function Analytics() {
   const [rounds, setRounds] = useState<Round[]>([]);
+  const [roundHoles, setRoundHoles] = useState<RoundHole[]>([]);
   const [workouts, setWorkouts] = useState<Workout[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -22,6 +30,12 @@ export default function Analytics() {
       .order("created_at", { ascending: false });
     setRounds((roundsData as Round[]) || []);
 
+    const { data: holesData } = await supabase
+      .from("round_holes")
+      .select("*")
+      .order("created_at", { ascending: false });
+    setRoundHoles((holesData as RoundHole[]) || []);
+
     const { data: workoutsData } = await supabase
       .from("workouts")
       .select("*")
@@ -31,6 +45,9 @@ export default function Analytics() {
   };
 
   const golfStats = getGolfStats(rounds);
+  const shortGameStats = getShortGameStats(roundHoles);
+  const penaltyControl = lowerIsBetterControl(golfStats.avgPenaltyShots, 0, 4);
+  const puttingControl = lowerIsBetterControl(golfStats.avgPutts, 30, 42);
   const roundsWithScores = rounds.filter((r) => r.score !== null);
   const recentScores = roundsWithScores.slice(0, 8).reverse().map((r) => r.score || 0);
   const workoutsThisWeek = (() => {
@@ -42,8 +59,12 @@ export default function Analytics() {
   const biggestOpportunity =
     rounds.length === 0
       ? "Log rounds to unlock scoring opportunities."
+      : (golfStats.avgPenaltyShots ?? 0) >= 2
+      ? "Penalty control is costing scoring chances. Prioritise safer targets and tee-shot decisions."
       : (golfStats.avgGirPercent ?? 0) < 55
       ? "Approach play is the clearest scoring opportunity."
+      : golfStats.avgScramblePercent !== null && golfStats.avgScramblePercent < 35
+      ? "Scrambling is the next scoring lever: missed greens need more pars, not automatic bogeys."
       : (golfStats.avgFairwayPercent ?? 0) < 55
       ? "Driving accuracy is the clearest scoring opportunity."
       : "Short-game and putting consistency are the next useful focus.";
@@ -80,7 +101,8 @@ export default function Analytics() {
         <ReportKpi label="Avg Score" value={formatAverage(golfStats.avgScore)} sub={`${rounds.length} rounds`} tone="golf" />
         <ReportKpi label="FIR" value={formatPercent(golfStats.avgFairwayPercent)} sub="tee accuracy" tone="golf" />
         <ReportKpi label="GIR" value={formatPercent(golfStats.avgGirPercent)} sub="approach marker" tone="pulse" />
-        <ReportKpi label="Training" value={workoutsThisWeek} sub={`${workouts.length} total sessions`} tone="lab" />
+        <ReportKpi label="Scramble" value={formatPercent(golfStats.avgScramblePercent)} sub="missed GIR recovery" tone="pulse" />
+        <ReportKpi label="Up & Down" value={formatPercent(shortGameStats.upAndDownPercent)} sub={`${shortGameStats.upAndDowns}/${shortGameStats.chipChances} chip chances`} tone="golf" />
       </section>
 
       <section className="grid gap-5 xl:grid-cols-[1.35fr_0.65fr]">
@@ -119,7 +141,20 @@ export default function Analytics() {
                 <Metric label="Fairways Hit" value={formatPercent(golfStats.avgFairwayPercent)} color="bg-golf" />
                 <Metric label="Greens In Regulation" value={formatPercent(golfStats.avgGirPercent)} color="bg-pulse" />
                 <Metric label="Scramble Rate" value={formatPercent(golfStats.avgScramblePercent)} color="bg-gold" />
-                <Metric label="Putts Per Round" value={formatAverage(golfStats.avgPutts)} color="bg-steel" />
+                <Metric label="Up & Down Rate" value={formatPercent(shortGameStats.upAndDownPercent)} color="bg-golf" />
+                <ControlMetric
+                  label="Putting Control"
+                  value={formatControlPercent(puttingControl)}
+                  sub={`${formatAverage(golfStats.avgPutts)} putts/round`}
+                  control={puttingControl}
+                />
+                <ControlMetric
+                  label="Penalty Control"
+                  value={formatControlPercent(penaltyControl)}
+                  sub={`${formatAverage(golfStats.avgPenaltyShots)} penalties/round`}
+                  control={penaltyControl}
+                  danger
+                />
               </div>
             </Surface>
 
@@ -200,6 +235,51 @@ function Metric({ label, value, color }: { label: string; value: string; color: 
       </div>
       <div className="h-2 overflow-hidden rounded-full bg-steel/10">
         <div className={`h-full rounded-full ${color}`} style={{ width }} />
+      </div>
+    </div>
+  );
+}
+
+function ControlMetric({
+  label,
+  value,
+  sub,
+  control,
+  danger,
+}: {
+  label: string;
+  value: string;
+  sub: string;
+  control: number | null;
+  danger?: boolean;
+}) {
+  const width = `${control ?? 0}%`;
+  const color =
+    control === null
+      ? "bg-steel/20"
+      : control >= 70
+      ? "bg-golf"
+      : control >= 40
+      ? "bg-gold"
+      : danger
+      ? "bg-danger"
+      : "bg-warning";
+
+  return (
+    <div>
+      <div className="mb-2 flex items-center justify-between gap-4">
+        <div>
+          <p className="text-sm font-medium text-muted">{label}</p>
+          <p className="text-xs text-muted">{sub}</p>
+        </div>
+        <p className="font-semibold text-dark">{value}</p>
+      </div>
+      <div className="relative h-2 overflow-hidden rounded-full bg-danger/15">
+        <div className={`absolute right-0 h-full rounded-full ${color}`} style={{ width }} />
+      </div>
+      <div className="mt-1 flex justify-between text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">
+        <span>Bad</span>
+        <span>Good</span>
       </div>
     </div>
   );

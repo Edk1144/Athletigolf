@@ -8,17 +8,26 @@ import {
   NotebookPen,
   PlusCircle,
   Target,
+  Trophy,
   Zap,
 } from "lucide-react";
 import { Button, EmptyState, SectionTitle, StatusPill, Surface } from "@/components/ui";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/lib/supabase";
-import { formatAverage, formatPercent, getGolfStats } from "@/lib/golfStats";
-import type { Round, Workout } from "@/lib/types";
+import {
+  formatAverage,
+  formatControlPercent,
+  formatPercent,
+  getGolfStats,
+  getShortGameStats,
+  lowerIsBetterControl,
+} from "@/lib/golfStats";
+import type { ExerciseLog, Round, RoundHole, Workout } from "@/lib/types";
 
 export default function Dashboard() {
   const { user } = useAuth();
   const [rounds, setRounds] = useState<Round[]>([]);
+  const [roundHoles, setRoundHoles] = useState<RoundHole[]>([]);
   const [workouts, setWorkouts] = useState<Workout[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -29,11 +38,13 @@ export default function Dashboard() {
 
   useEffect(() => {
     const load = async () => {
-      const [{ data: r }, { data: w }] = await Promise.all([
+      const [{ data: r }, { data: h }, { data: w }] = await Promise.all([
         supabase.from("rounds").select("*").order("created_at", { ascending: false }),
+        supabase.from("round_holes").select("*").order("created_at", { ascending: false }),
         supabase.from("workouts").select("*").order("created_at", { ascending: false }),
       ]);
       setRounds((r as Round[]) || []);
+      setRoundHoles((h as RoundHole[]) || []);
       setWorkouts((w as Workout[]) || []);
       setLoading(false);
     };
@@ -48,6 +59,10 @@ export default function Dashboard() {
   const latestWorkout = workouts[0] ?? null;
   const lastRound = rounds[0] ?? null;
   const golfStats = getGolfStats(rounds);
+  const shortGameStats = getShortGameStats(roundHoles);
+  const penaltyControl = lowerIsBetterControl(golfStats.avgPenaltyShots, 0, 4);
+  const puttingControl = lowerIsBetterControl(golfStats.avgPutts, 30, 42);
+  const highlight = getWeeklyHighlight(rounds, roundHoles, workouts, weekAgo);
 
   const activity = [
     ...rounds.slice(0, 3).map((round) => ({
@@ -99,10 +114,21 @@ export default function Dashboard() {
 
         <Surface className="bg-panel/95">
           <SectionTitle eyebrow="Today" title={now.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })} />
-          <div className="grid gap-3 md:grid-cols-3">
+          <div className="grid gap-3 md:grid-cols-2">
             <SummaryTile label="Last Round" value={lastRound ? `${lastRound.score ?? "-"}${lastRound.course ? ` / ${lastRound.course}` : ""}` : "No round"} tone="golf" />
             <SummaryTile label="Last Training" value={latestWorkout?.workout_name || "No session"} tone="lab" />
-            <SummaryTile label="Next Action" value={rounds.length ? "Log practice" : "Submit round"} tone="pulse" />
+          </div>
+          <div className="mt-3 rounded-xl border border-pulse/20 bg-pulse/8 p-4">
+            <div className="flex items-start gap-3">
+              <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-pulse/15 text-pulse">
+                <Trophy className="h-5 w-5" />
+              </span>
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.16em] text-lab">Highlight of the week</p>
+                <h3 className="mt-1 font-semibold text-dark">{highlight.title}</h3>
+                <p className="mt-1 text-sm text-muted">{highlight.detail}</p>
+              </div>
+            </div>
           </div>
         </Surface>
       </section>
@@ -111,7 +137,8 @@ export default function Dashboard() {
         <Kpi label="Avg Score" value={formatAverage(golfStats.avgScore)} sub={`${rounds.length} rounds`} tone="golf" />
         <Kpi label="FIR" value={formatPercent(golfStats.avgFairwayPercent)} sub="driving shape" tone="golf" />
         <Kpi label="GIR" value={formatPercent(golfStats.avgGirPercent)} sub="approach control" tone="pulse" />
-        <Kpi label="Training Load" value={workouts.length} sub="sessions logged" tone="lab" />
+        <Kpi label="Scramble" value={formatPercent(golfStats.avgScramblePercent)} sub="missed GIR recovery" tone="pulse" />
+        <Kpi label="Up & Down" value={formatPercent(shortGameStats.upAndDownPercent)} sub={`${shortGameStats.upAndDowns}/${shortGameStats.chipChances} chip chances`} tone="golf" />
       </section>
 
       <section className="grid gap-5 xl:grid-cols-[1fr_1fr_0.8fr]">
@@ -121,8 +148,21 @@ export default function Dashboard() {
             <div className="space-y-4">
               <Meter label="Fairways" value={formatPercent(golfStats.avgFairwayPercent)} color="bg-golf" />
               <Meter label="GIR" value={formatPercent(golfStats.avgGirPercent)} color="bg-pulse" />
-              <Meter label="Putts" value={formatAverage(golfStats.avgPutts)} color="bg-gold" />
-              <Meter label="Penalties" value={formatAverage(golfStats.avgPenaltyShots)} color="bg-danger" />
+              <Meter label="Scramble Rate" value={formatPercent(golfStats.avgScramblePercent)} color="bg-gold" />
+              <Meter label="Up & Down Rate" value={formatPercent(shortGameStats.upAndDownPercent)} color="bg-golf" />
+              <ControlMeter
+                label="Putting Control"
+                value={formatControlPercent(puttingControl)}
+                sub={`${formatAverage(golfStats.avgPutts)} putts/round`}
+                control={puttingControl}
+              />
+              <ControlMeter
+                label="Penalty Control"
+                value={formatControlPercent(penaltyControl)}
+                sub={`${formatAverage(golfStats.avgPenaltyShots)} penalties/round`}
+                control={penaltyControl}
+                danger
+              />
             </div>
           ) : (
             <EmptyState
@@ -255,6 +295,51 @@ function Meter({ label, value, color }: { label: string; value: string; color: s
   );
 }
 
+function ControlMeter({
+  label,
+  value,
+  sub,
+  control,
+  danger,
+}: {
+  label: string;
+  value: string;
+  sub: string;
+  control: number | null;
+  danger?: boolean;
+}) {
+  const width = `${control ?? 0}%`;
+  const color =
+    control === null
+      ? "bg-steel/20"
+      : control >= 70
+      ? "bg-golf"
+      : control >= 40
+      ? "bg-gold"
+      : danger
+      ? "bg-danger"
+      : "bg-warning";
+
+  return (
+    <div>
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-medium text-muted">{label}</p>
+          <p className="text-xs text-muted">{sub}</p>
+        </div>
+        <p className="font-semibold text-dark">{value}</p>
+      </div>
+      <div className="relative h-2 overflow-hidden rounded-full bg-danger/15">
+        <div className={`absolute right-0 h-full rounded-full ${color}`} style={{ width }} />
+      </div>
+      <div className="mt-1 flex justify-between text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">
+        <span>Bad</span>
+        <span>Good</span>
+      </div>
+    </div>
+  );
+}
+
 function LoadRow({ label, value, target }: { label: string; value: number; target: number }) {
   const width = `${Math.min((value / target) * 100, 100)}%`;
   return (
@@ -306,4 +391,94 @@ function Action({
       </a>
     </Link>
   );
+}
+
+function getWeeklyHighlight(
+  rounds: Round[],
+  holes: RoundHole[],
+  workouts: Workout[],
+  weekAgo: Date
+) {
+  const roundsThisWeek = rounds.filter((round) => new Date(round.created_at) >= weekAgo);
+  const workoutsThisWeek = workouts.filter((workout) => new Date(workout.created_at) >= weekAgo);
+  const birdie = holes.find(
+    (hole) => new Date(hole.created_at) >= weekAgo && hole.score !== null && hole.score < hole.par
+  );
+  if (birdie) {
+    return {
+      title: `Birdie on hole ${birdie.hole_number}`,
+      detail: "That is the kind of scoring moment worth building around.",
+    };
+  }
+
+  const pr = findWeeklyTrainingPr(workouts, weekAgo);
+  if (pr) return pr;
+
+  const firstRoundThisWeek = roundsThisWeek.length > 0 && rounds.length === roundsThisWeek.length;
+  if (firstRoundThisWeek) {
+    return {
+      title: "First round submitted",
+      detail: "You have started the golf data layer. That is the real first milestone.",
+    };
+  }
+
+  if (roundsThisWeek.length > 0) {
+    return {
+      title: `${roundsThisWeek.length} round${roundsThisWeek.length === 1 ? "" : "s"} logged this week`,
+      detail: "Fresh round data gives the dashboard a much better signal.",
+    };
+  }
+
+  if (workoutsThisWeek.length > 0) {
+    return {
+      title: `${workoutsThisWeek.length} training session${workoutsThisWeek.length === 1 ? "" : "s"} logged`,
+      detail: "Consistency is building the performance side of the platform.",
+    };
+  }
+
+  return {
+    title: "Ready for a new highlight",
+    detail: "Log a round or training session this week and AthletiGolf will surface the best moment here.",
+  };
+}
+
+function findWeeklyTrainingPr(workouts: Workout[], weekAgo: Date) {
+  const previousBest = new Map<string, number>();
+  const sortedWorkouts = [...workouts].sort(
+    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+  );
+
+  for (const workout of sortedWorkouts) {
+    const isThisWeek = new Date(workout.created_at) >= weekAgo;
+    for (const exercise of workout.exercises || []) {
+      const weight = parseWeight(exercise);
+      const name = exercise.name?.trim();
+      if (!name || weight === null) continue;
+
+      const key = name.toLowerCase();
+      const bestBefore = previousBest.get(key);
+      if (isThisWeek && bestBefore !== undefined && weight >= bestBefore + 2.5) {
+        return {
+          title: `${name} PR: ${weight}kg`,
+          detail: `Up ${formatWeightDelta(weight - bestBefore)} from your previous best.`,
+        };
+      }
+      if (bestBefore === undefined || weight > bestBefore) {
+        previousBest.set(key, weight);
+      }
+    }
+  }
+
+  return null;
+}
+
+function parseWeight(exercise: ExerciseLog) {
+  const match = exercise.weight?.match(/[\d.]+/);
+  if (!match) return null;
+  const value = Number(match[0]);
+  return Number.isFinite(value) ? value : null;
+}
+
+function formatWeightDelta(value: number) {
+  return `${Number.isInteger(value) ? value.toFixed(0) : value.toFixed(1)}kg`;
 }

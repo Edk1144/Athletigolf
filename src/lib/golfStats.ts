@@ -1,4 +1,4 @@
-import type { Round } from "@/lib/types";
+import type { Round, RoundHole } from "@/lib/types";
 
 const FAIRWAY_HOLES_PER_ROUND = 14;
 
@@ -64,8 +64,34 @@ export function getGolfStats(rounds: Round[]) {
   };
 }
 
+export function getShortGameStats(holes: RoundHole[]) {
+  const chipChances = holes.filter((hole) => (hole.chip_shots ?? 0) > 0);
+  const upAndDowns = chipChances.filter((hole) => (hole.putts ?? 0) <= 1);
+
+  return {
+    chipChances: chipChances.length,
+    upAndDowns: upAndDowns.length,
+    upAndDownPercent:
+      chipChances.length > 0 ? Math.round((upAndDowns.length / chipChances.length) * 100) : null,
+  };
+}
+
 export const formatAverage = (value: number | null, digits = 1) =>
   value === null ? "-" : value.toFixed(digits);
 
 export const formatPercent = (value: number | null) =>
+  value === null ? "-" : `${value}%`;
+
+export const lowerIsBetterControl = (
+  value: number | null,
+  cautionPoint: number,
+  dangerPoint: number
+) => {
+  if (value === null) return null;
+  if (value <= cautionPoint) return 100;
+  const bounded = Math.min(Math.max(value - cautionPoint, 0), dangerPoint - cautionPoint);
+  return Math.round(100 - (bounded / (dangerPoint - cautionPoint)) * 100);
+};
+
+export const formatControlPercent = (value: number | null) =>
   value === null ? "-" : `${value}%`;
