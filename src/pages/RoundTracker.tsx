@@ -4,7 +4,7 @@ import { ArrowLeft, CheckCircle2, Flag, Save } from "lucide-react";
 import { Button, Card, PageHeader, StatCard } from "@/components/ui";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/lib/supabase";
-import type { FairwayResult } from "@/lib/types";
+import type { FairwayResult, TeeShotLocation } from "@/lib/types";
 
 type Step = "setup" | "holes" | "review" | "saved";
 
@@ -12,11 +12,13 @@ type Hole = {
   par: number;
   score: string;
   fairway: FairwayResult;
+  teeShotLocation: "" | TeeShotLocation;
   gir: boolean;
   putts: string;
   penaltyShots: string;
   chipShots: string;
   greensideBunkerShots: string;
+  recoveryShotType: "" | "chip" | "sand";
 };
 
 const createHoles = (count: number): Hole[] =>
@@ -24,11 +26,13 @@ const createHoles = (count: number): Hole[] =>
     par: 4,
     score: "",
     fairway: "na",
+    teeShotLocation: "",
     gir: false,
     putts: "",
     penaltyShots: "",
     chipShots: "",
     greensideBunkerShots: "",
+    recoveryShotType: "",
   }));
 
 const parseStat = (value: string) => Number(value || 0);
@@ -36,6 +40,11 @@ const parseOptionalNumber = (value: string) => {
   const trimmed = value.trim();
   return trimmed === "" ? null : Number(trimmed);
 };
+const needsRecoveryChoice = (hole: Hole) =>
+  parseStat(hole.chipShots) > 0 &&
+  parseStat(hole.greensideBunkerShots) > 0 &&
+  hole.putts.trim() !== "" &&
+  hole.recoveryShotType === "";
 
 export default function RoundTracker() {
   const { user } = useAuth();
@@ -50,17 +59,26 @@ export default function RoundTracker() {
   const [date, setDate] = useState("");
   const [notes, setNotes] = useState("");
   const [holes, setHoles] = useState<Hole[]>(createHoles(18));
+  const [currentHoleIndex, setCurrentHoleIndex] = useState(0);
+  const [recoveryPromptIndex, setRecoveryPromptIndex] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
 
   const updateHole = <K extends keyof Hole>(index: number, field: K, value: Hole[K]) => {
-    setHoles((prev) =>
-      prev.map((hole, i) => (i === index ? { ...hole, [field]: value } : hole))
-    );
+    const updatedHole = { ...holes[index], [field]: value };
+    if (field === "fairway" && (value === "hit" || value === "na")) {
+      updatedHole.teeShotLocation = "";
+    }
+    setHoles((prev) => prev.map((hole, i) => (i === index ? updatedHole : hole)));
+
+    if (needsRecoveryChoice(updatedHole)) {
+      setRecoveryPromptIndex(index);
+    }
   };
 
   const startRound = () => {
     setHoles(createHoles(holesPlayed));
+    setCurrentHoleIndex(0);
     setSaveError("");
     setStep("holes");
   };
@@ -127,10 +145,39 @@ export default function RoundTracker() {
     return score > 0 ? `+${score}` : `${score}`;
   };
 
+  const currentHole = holes[currentHoleIndex];
+  const currentHoleScore =
+    currentHole && currentHole.score !== "" ? Number(currentHole.score) - currentHole.par : null;
+
+  const goToNextHole = () => {
+    setSaveError("");
+    setCurrentHoleIndex((index) => Math.min(index + 1, holesPlayed - 1));
+  };
+
+  const goToPreviousHole = () => {
+    setSaveError("");
+    setCurrentHoleIndex((index) => Math.max(index - 1, 0));
+  };
+
+  const reviewRound = () => {
+    if (!stats.holesCompleted) {
+      setSaveError("Enter at least one hole before finishing the round.");
+      return;
+    }
+    setSaveError("");
+    setStep("review");
+  };
+
   const finishRound = async () => {
     if (!user) return;
-    if (stats.holesCompleted !== holesPlayed) {
-      setSaveError(`Complete all ${holesPlayed} holes before saving.`);
+    if (!stats.holesCompleted) {
+      setSaveError("Enter at least one hole before saving the round.");
+      return;
+    }
+    const unresolvedRecoveryIndex = holes.findIndex(needsRecoveryChoice);
+    if (unresolvedRecoveryIndex >= 0) {
+      setRecoveryPromptIndex(unresolvedRecoveryIndex);
+      setSaveError(`Choose whether hole ${unresolvedRecoveryIndex + 1}'s one-putt came after a chip or bunker shot.`);
       return;
     }
 
@@ -176,11 +223,13 @@ export default function RoundTracker() {
       par: hole.par,
       score: hole.score === "" ? null : Number(hole.score),
       fairway_result: hole.par === 3 ? "na" : hole.fairway,
+      tee_shot_location: hole.par === 3 ? null : hole.teeShotLocation || null,
       gir: hole.gir,
       putts: parseStat(hole.putts),
       penalty_shots: parseStat(hole.penaltyShots),
       chip_shots: parseStat(hole.chipShots),
       greenside_bunker_shots: parseStat(hole.greensideBunkerShots),
+      recovery_shot_type: hole.recoveryShotType || null,
     }));
 
     const { error: holesError } = await supabase.from("round_holes").insert(holeRows);
@@ -205,6 +254,7 @@ export default function RoundTracker() {
     setNotes("");
     setHolesPlayed(18);
     setHoles(createHoles(18));
+    setCurrentHoleIndex(0);
     setSaveError("");
     setStep("setup");
   };
@@ -334,6 +384,169 @@ export default function RoundTracker() {
               <StatCard label="Penalties" value={stats.penaltyShots} tone="bg-white" />
             </section>
 
+            {step === "holes" && currentHole && (
+              <Card className="p-5 md:p-7">
+                <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <p className="text-sm font-semibold uppercase tracking-[0.18em] text-golf">
+                      Hole {currentHoleIndex + 1} of {holesPlayed}
+                    </p>
+                    <h2 className="mt-2 text-4xl font-semibold">
+                      {currentHole.score ? formatToPar(currentHoleScore ?? 0) : "Not scored"}
+                    </h2>
+                    <p className="mt-2 text-sm text-muted">
+                      Enter the hole details, skip ahead, or finish when you are ready to review.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    {holes.map((hole, index) => (
+                      <button
+                        key={index}
+                        onClick={() => setCurrentHoleIndex(index)}
+                        className={`h-10 w-10 rounded-lg border text-sm font-semibold transition ${
+                          index === currentHoleIndex
+                            ? "border-golf bg-golf text-white"
+                            : hole.score
+                              ? "border-golf/30 bg-golf/10 text-golf"
+                              : "border-line bg-white text-muted hover:border-golf/40"
+                        }`}
+                        aria-label={`Go to hole ${index + 1}`}
+                      >
+                        {index + 1}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {currentHoleIndex === 8 && holesPlayed === 18 && (
+                  <div className="mb-5 rounded-lg border border-gold/30 bg-gold/10 px-4 py-3 text-sm font-medium text-dark">
+                    Turn after this hole.
+                  </div>
+                )}
+
+                <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-4">
+                  <SelectField
+                    label="Par"
+                    value={currentHole.par.toString()}
+                    onChange={(value) => {
+                      const nextPar = Number(value);
+                      updateHole(currentHoleIndex, "par", nextPar);
+                      if (nextPar === 3) updateHole(currentHoleIndex, "fairway", "na");
+                    }}
+                    options={["3", "4", "5"]}
+                  />
+                  <Field
+                    label="Score"
+                    type="number"
+                    value={currentHole.score}
+                    onChange={(value) => updateHole(currentHoleIndex, "score", value)}
+                  />
+                  <SelectField
+                    label="Fairway"
+                    value={currentHole.fairway}
+                    disabled={currentHole.par === 3}
+                    onChange={(value) =>
+                      updateHole(currentHoleIndex, "fairway", value as FairwayResult)
+                    }
+                    options={["na", "hit", "left", "right", "miss"]}
+                  />
+                  {currentHole.par !== 3 &&
+                    currentHole.fairway !== "hit" &&
+                    currentHole.fairway !== "na" && (
+                      <SelectField
+                        label="Where did it finish?"
+                        value={currentHole.teeShotLocation}
+                        onChange={(value) =>
+                          updateHole(currentHoleIndex, "teeShotLocation", value as "" | TeeShotLocation)
+                        }
+                        options={[
+                          "",
+                          "rough",
+                          "fairway_bunker",
+                          "woods",
+                          "water",
+                          "out_of_bounds",
+                          "other_fairway",
+                          "other",
+                        ]}
+                      />
+                    )}
+                  <label className="flex items-center gap-3 rounded-lg border border-line px-4 py-3">
+                    <input
+                      type="checkbox"
+                      checked={currentHole.gir}
+                      onChange={(event) =>
+                        updateHole(currentHoleIndex, "gir", event.target.checked)
+                      }
+                    />
+                    <span className="text-sm font-medium">GIR</span>
+                  </label>
+                  <Field
+                    label="Putts"
+                    type="number"
+                    value={currentHole.putts}
+                    onChange={(value) => updateHole(currentHoleIndex, "putts", value)}
+                  />
+                  <Field
+                    label="Penalties"
+                    type="number"
+                    value={currentHole.penaltyShots}
+                    onChange={(value) =>
+                      updateHole(currentHoleIndex, "penaltyShots", value)
+                    }
+                  />
+                  <Field
+                    label="Chips"
+                    type="number"
+                    value={currentHole.chipShots}
+                    onChange={(value) => updateHole(currentHoleIndex, "chipShots", value)}
+                  />
+                  <Field
+                    label="Bunkers"
+                    type="number"
+                    value={currentHole.greensideBunkerShots}
+                    onChange={(value) =>
+                      updateHole(currentHoleIndex, "greensideBunkerShots", value)
+                    }
+                  />
+                </div>
+
+                <div className="mt-8 flex flex-col-reverse gap-3 lg:flex-row lg:items-center lg:justify-between">
+                  <Button
+                    variant="secondary"
+                    onClick={goToPreviousHole}
+                    disabled={currentHoleIndex === 0}
+                  >
+                    Previous
+                  </Button>
+                  <div className="flex flex-col gap-3 sm:flex-row">
+                    <Button
+                      variant="secondary"
+                      onClick={goToNextHole}
+                      disabled={currentHoleIndex === holesPlayed - 1}
+                    >
+                      Skip Hole
+                    </Button>
+                    {currentHoleIndex < holesPlayed - 1 ? (
+                      <Button variant="golf" onClick={goToNextHole}>
+                        Next Hole
+                      </Button>
+                    ) : (
+                      <Button variant="golf" onClick={reviewRound}>
+                        Finish
+                      </Button>
+                    )}
+                    {currentHoleIndex < holesPlayed - 1 && (
+                      <Button variant="golf" onClick={reviewRound}>
+                        Finish
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </Card>
+            )}
+
             {step === "review" && (
               <Card className="mb-6 border-golf/20 bg-golf/5">
                 <h2 className="mb-2 text-2xl font-semibold text-golf">
@@ -346,92 +559,99 @@ export default function RoundTracker() {
               </Card>
             )}
 
-            <div className="grid gap-4">
-              {holes.map((hole, index) => {
-                const holeScore =
-                  hole.score === "" ? null : Number(hole.score) - hole.par;
+            {step === "review" && (
+              <Card className="overflow-hidden p-0">
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[900px] text-left text-sm">
+                    <thead className="bg-steel/10 text-muted">
+                      <tr>
+                        <th className="p-4">Hole</th>
+                        <th className="p-4">Par</th>
+                        <th className="p-4">Score</th>
+                        <th className="p-4">Fairway</th>
+                        <th className="p-4">Tee lie</th>
+                        <th className="p-4">GIR</th>
+                        <th className="p-4">Putts</th>
+                        <th className="p-4">Pen</th>
+                        <th className="p-4">Short game</th>
+                        <th className="p-4">Edit</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {holes.map((hole, index) => (
+                        <tr key={index} className="border-t border-line">
+                          <td className="p-4 font-semibold">{index + 1}</td>
+                          <td className="p-4">{hole.par}</td>
+                          <td className="p-4">{hole.score || "-"}</td>
+                          <td className="p-4 capitalize">{formatOption(hole.fairway)}</td>
+                          <td className="p-4 capitalize">
+                            {hole.teeShotLocation ? formatOption(hole.teeShotLocation) : "-"}
+                          </td>
+                          <td className="p-4">{hole.gir ? "Yes" : "No"}</td>
+                          <td className="p-4">{hole.putts || "-"}</td>
+                          <td className="p-4">{hole.penaltyShots || "0"}</td>
+                          <td className="p-4">
+                            {parseStat(hole.chipShots) + parseStat(hole.greensideBunkerShots)}
+                          </td>
+                          <td className="p-4">
+                            <button
+                              onClick={() => {
+                                setCurrentHoleIndex(index);
+                                setStep("holes");
+                              }}
+                              className="font-semibold text-golf"
+                            >
+                              Edit
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+            )}
 
-                return (
-                  <Card key={index} className="p-5">
-                    <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                      <div>
-                        <p className="text-sm font-semibold text-golf">Hole {index + 1}</p>
-                        <h2 className="text-2xl font-semibold">
-                          {hole.score ? formatToPar(holeScore ?? 0) : "Not scored"}
-                        </h2>
-                      </div>
-                      {index === 8 && holesPlayed === 18 && (
-                        <span className="rounded-full bg-golf/10 px-4 py-2 text-sm font-medium text-golf">
-                          Turn after this hole
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="grid gap-3 md:grid-cols-4 xl:grid-cols-8">
-                      <SelectField
-                        label="Par"
-                        value={hole.par.toString()}
-                        onChange={(value) => {
-                          const nextPar = Number(value);
-                          updateHole(index, "par", nextPar);
-                          if (nextPar === 3) updateHole(index, "fairway", "na");
-                        }}
-                        options={["3", "4", "5"]}
-                      />
-                      <Field
-                        label="Score"
-                        type="number"
-                        value={hole.score}
-                        onChange={(value) => updateHole(index, "score", value)}
-                      />
-                      <SelectField
-                        label="Fairway"
-                        value={hole.fairway}
-                        disabled={hole.par === 3}
-                        onChange={(value) =>
-                          updateHole(index, "fairway", value as FairwayResult)
-                        }
-                        options={["na", "hit", "left", "right", "miss"]}
-                      />
-                      <label className="flex items-center gap-3 rounded-lg border border-line px-4 py-3">
-                        <input
-                          type="checkbox"
-                          checked={hole.gir}
-                          onChange={(event) => updateHole(index, "gir", event.target.checked)}
-                        />
-                        <span className="text-sm font-medium">GIR</span>
-                      </label>
-                      <Field
-                        label="Putts"
-                        type="number"
-                        value={hole.putts}
-                        onChange={(value) => updateHole(index, "putts", value)}
-                      />
-                      <Field
-                        label="Penalties"
-                        type="number"
-                        value={hole.penaltyShots}
-                        onChange={(value) => updateHole(index, "penaltyShots", value)}
-                      />
-                      <Field
-                        label="Chips"
-                        type="number"
-                        value={hole.chipShots}
-                        onChange={(value) => updateHole(index, "chipShots", value)}
-                      />
-                      <Field
-                        label="Bunkers"
-                        type="number"
-                        value={hole.greensideBunkerShots}
-                        onChange={(value) =>
-                          updateHole(index, "greensideBunkerShots", value)
-                        }
-                      />
-                    </div>
-                  </Card>
-                );
-              })}
-            </div>
+            {recoveryPromptIndex !== null && holes[recoveryPromptIndex] && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
+                <button
+                  className="absolute inset-0 bg-black/45"
+                  onClick={() => setRecoveryPromptIndex(null)}
+                  aria-label="Close recovery choice"
+                />
+                <div className="relative z-10 w-full max-w-md rounded-xl bg-white p-6 shadow-2xl">
+                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-golf">
+                    Hole {recoveryPromptIndex + 1}
+                  </p>
+                  <h2 className="mt-2 text-2xl font-semibold text-dark">
+                    What recovery shot came before putting?
+                  </h2>
+                  <p className="mt-3 text-sm leading-relaxed text-muted">
+                    This hole has both a greenside bunker shot and a chip shot. Choose the recovery shot that led into putting so it counts as either an up-and-down chance or a sand-save chance, not both.
+                  </p>
+                  <div className="mt-6 grid gap-3 sm:grid-cols-2">
+                    <Button
+                      variant="golf"
+                      onClick={() => {
+                        updateHole(recoveryPromptIndex, "recoveryShotType", "chip");
+                        setRecoveryPromptIndex(null);
+                      }}
+                    >
+                      Chip shot
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      onClick={() => {
+                        updateHole(recoveryPromptIndex, "recoveryShotType", "sand");
+                        setRecoveryPromptIndex(null);
+                      }}
+                    >
+                      Bunker shot
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {saveError && (
               <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-red-700">
@@ -444,15 +664,14 @@ export default function RoundTracker() {
                 <ArrowLeft className="h-4 w-4" />
                 Back To Setup
               </Button>
-              <div className="flex flex-col gap-3 sm:flex-row">
-                {step === "holes" ? (
+              {step === "review" && (
+                <div className="flex flex-col gap-3 sm:flex-row">
                   <Button
-                    onClick={() => setStep("review")}
-                    variant="golf"
+                    onClick={() => setStep("holes")}
+                    variant="secondary"
                   >
-                    Review Round
+                    Back To Hole Entry
                   </Button>
-                ) : (
                   <Button
                     onClick={finishRound}
                     disabled={saving}
@@ -461,8 +680,8 @@ export default function RoundTracker() {
                     <Save className="h-4 w-4" />
                     {saving ? "Saving..." : "Save Round"}
                   </Button>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           </>
         )}
@@ -520,10 +739,15 @@ function SelectField({
       >
         {options.map((option) => (
           <option key={option} value={option}>
-            {option}
+            {formatOption(option)}
           </option>
         ))}
       </select>
     </div>
   );
+}
+
+function formatOption(option: string) {
+  if (option === "na") return "N/A";
+  return option.replaceAll("_", " ");
 }

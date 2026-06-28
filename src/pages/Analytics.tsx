@@ -108,6 +108,7 @@ export default function Analytics() {
         <ReportKpi label="GIR" value={formatPercent(golfStats.avgGirPercent)} sub="approach marker" tone="pulse" />
         <ReportKpi label="Scramble" value={formatPercent(golfStats.avgScramblePercent)} sub="missed GIR recovery" tone="pulse" />
         <ReportKpi label="Up & Down" value={formatPercent(shortGameStats.upAndDownPercent)} sub={`${shortGameStats.upAndDowns}/${shortGameStats.chipChances} chip chances`} tone="golf" />
+        <ReportKpi label="Sand Save" value={formatPercent(shortGameStats.sandSavePercent)} sub={`${shortGameStats.sandSaves}/${shortGameStats.sandSaveChances} bunker chances`} tone="golf" />
         <ReportKpi label="Avg Drive" value={formatDistance(golfStats.avgDrivingDistance)} sub={`best ${formatDistance(golfStats.longestDrive)}`} tone="golf" />
       </section>
 
@@ -150,6 +151,7 @@ export default function Analytics() {
                 <Metric label="Greens In Regulation" value={formatPercent(golfStats.avgGirPercent)} color="bg-pulse" />
                 <Metric label="Scramble Rate" value={formatPercent(golfStats.avgScramblePercent)} color="bg-gold" />
                 <Metric label="Up & Down Rate" value={formatPercent(shortGameStats.upAndDownPercent)} color="bg-golf" />
+                <Metric label="Sand Save Rate" value={formatPercent(shortGameStats.sandSavePercent)} color="bg-gold" />
                 <ControlMetric
                   label="Putting Control"
                   value={formatControlPercent(puttingControl)}

@@ -74,15 +74,39 @@ export function getGolfStats(rounds: Round[]) {
 }
 
 export function getShortGameStats(holes: RoundHole[]) {
-  const chipChances = holes.filter((hole) => (hole.chip_shots ?? 0) > 0);
+  const chipChances = holes.filter((hole) => isChipRecoveryHole(hole));
   const upAndDowns = chipChances.filter((hole) => (hole.putts ?? 0) <= 1);
+  const sandSaveChances = holes.filter((hole) => isSandRecoveryHole(hole));
+  const sandSaves = sandSaveChances.filter((hole) => (hole.putts ?? 0) <= 1);
 
   return {
     chipChances: chipChances.length,
     upAndDowns: upAndDowns.length,
     upAndDownPercent:
       chipChances.length > 0 ? Math.round((upAndDowns.length / chipChances.length) * 100) : null,
+    sandSaveChances: sandSaveChances.length,
+    sandSaves: sandSaves.length,
+    sandSavePercent:
+      sandSaveChances.length > 0
+        ? Math.round((sandSaves.length / sandSaveChances.length) * 100)
+        : null,
   };
+}
+
+function isChipRecoveryHole(hole: RoundHole) {
+  const chips = hole.chip_shots ?? 0;
+  const bunkers = hole.greenside_bunker_shots ?? 0;
+  if (chips <= 0) return false;
+  if (bunkers <= 0) return true;
+  return hole.recovery_shot_type === "chip";
+}
+
+function isSandRecoveryHole(hole: RoundHole) {
+  const bunkers = hole.greenside_bunker_shots ?? 0;
+  const chips = hole.chip_shots ?? 0;
+  if (bunkers <= 0) return false;
+  if (chips <= 0) return true;
+  return hole.recovery_shot_type === "sand";
 }
 
 export const formatAverage = (value: number | null, digits = 1) =>

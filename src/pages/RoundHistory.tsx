@@ -540,11 +540,13 @@ function RoundDetailsModal({
                   <th className="p-3">Par</th>
                   <th className="p-3">Score</th>
                   <th className="p-3">Fairway</th>
+                  <th className="p-3">Tee lie</th>
                   <th className="p-3">GIR</th>
                   <th className="p-3">Putts</th>
                   <th className="p-3">Pen</th>
                   <th className="p-3">Chips</th>
                   <th className="p-3">Bunkers</th>
+                  <th className="p-3">Recovery</th>
                 </tr>
               </thead>
               <tbody>
@@ -553,12 +555,14 @@ function RoundDetailsModal({
                     <td className="p-3 font-medium">{hole.hole_number}</td>
                     <td className="p-3">{hole.par}</td>
                     <td className="p-3">{hole.score ?? "-"}</td>
-                    <td className="p-3 capitalize">{hole.fairway_result || "na"}</td>
+                    <td className="p-3 capitalize">{formatCell(hole.fairway_result || "na")}</td>
+                    <td className="p-3 capitalize">{formatCell(hole.tee_shot_location || "-")}</td>
                     <td className="p-3">{hole.gir ? "Yes" : "No"}</td>
                     <td className="p-3">{hole.putts ?? 0}</td>
                     <td className="p-3">{hole.penalty_shots ?? 0}</td>
                     <td className="p-3">{hole.chip_shots ?? 0}</td>
                     <td className="p-3">{hole.greenside_bunker_shots ?? 0}</td>
+                    <td className="p-3 capitalize">{formatCell(hole.recovery_shot_type || "-")}</td>
                   </tr>
                 ))}
               </tbody>
@@ -591,6 +595,11 @@ function RoundDetailsModal({
       </div>
     </div>
   );
+}
+
+function formatCell(value: string) {
+  if (value === "na") return "N/A";
+  return value.replaceAll("_", " ");
 }
 
 function Field({

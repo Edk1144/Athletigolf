@@ -144,6 +144,7 @@ export default function Dashboard() {
         <Kpi label="GIR" value={formatPercent(golfStats.avgGirPercent)} sub="approach control" tone="pulse" />
         <Kpi label="Avg Drive" value={formatDistance(golfStats.avgDrivingDistance)} sub="distance tracked" tone="golf" />
         <Kpi label="Up & Down" value={formatPercent(shortGameStats.upAndDownPercent)} sub={`${shortGameStats.upAndDowns}/${shortGameStats.chipChances} chip chances`} tone="golf" />
+        <Kpi label="Sand Save" value={formatPercent(shortGameStats.sandSavePercent)} sub={`${shortGameStats.sandSaves}/${shortGameStats.sandSaveChances} bunker chances`} tone="golf" />
       </section>
 
       <section className="grid gap-5 xl:grid-cols-[1fr_1fr_0.8fr]">
@@ -156,6 +157,7 @@ export default function Dashboard() {
               <Meter label="GIR" value={formatPercent(golfStats.avgGirPercent)} color="bg-pulse" />
               <Meter label="Scramble Rate" value={formatPercent(golfStats.avgScramblePercent)} color="bg-gold" />
               <Meter label="Up & Down Rate" value={formatPercent(shortGameStats.upAndDownPercent)} color="bg-golf" />
+              <Meter label="Sand Save Rate" value={formatPercent(shortGameStats.sandSavePercent)} color="bg-gold" />
               <ControlMeter
                 label="Putting Control"
                 value={formatControlPercent(puttingControl)}

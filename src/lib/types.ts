@@ -32,7 +32,21 @@ export type Round = {
   created_at: string;
 };
 
-export type FairwayResult = "hit" | "left" | "right" | "miss" | "na";
+export type FairwayResult =
+  | "hit"
+  | "left"
+  | "right"
+  | "miss"
+  | "na";
+
+export type TeeShotLocation =
+  | "rough"
+  | "fairway_bunker"
+  | "woods"
+  | "water"
+  | "out_of_bounds"
+  | "other_fairway"
+  | "other";
 
 export type RoundHole = {
   id: string;
@@ -42,11 +56,13 @@ export type RoundHole = {
   par: number;
   score: number | null;
   fairway_result: FairwayResult | null;
+  tee_shot_location?: TeeShotLocation | null;
   gir: boolean;
   putts: number | null;
   penalty_shots: number | null;
   chip_shots: number | null;
   greenside_bunker_shots: number | null;
+  recovery_shot_type?: "chip" | "sand" | null;
   created_at: string;
 };
 
