@@ -24,8 +24,13 @@ import {
   lowerIsBetterControl,
 } from "@/lib/golfStats";
 import {
+  getCoachNotes,
+  getDataHealthChecklist,
+  getExerciseAlternatives,
   getPerformanceInsights,
+  getRecommendedPracticePlan,
   getRelationshipInsights,
+  getTrainingIntelligence,
   type PerformanceInsight,
   type RelationshipInsight,
 } from "@/lib/insights";
@@ -80,6 +85,12 @@ export default function Dashboard() {
   const highlight = getWeeklyHighlight(rounds, roundHoles, workouts, weekAgo);
   const performanceInsights = getPerformanceInsights(rounds, roundHoles, workouts, practices);
   const relationshipInsights = getRelationshipInsights(rounds, workouts);
+  const trainingIntel = getTrainingIntelligence(workouts);
+  const coachNotes = getCoachNotes(rounds, roundHoles, workouts, practices);
+  const practicePlan = getRecommendedPracticePlan(rounds, roundHoles);
+  const dataHealth = getDataHealthChecklist(rounds, workouts, practices);
+  const alternatives = getExerciseAlternatives(trainingIntel.stalledLift?.name || trainingIntel.recentPr?.name);
+  const recommendedPracticeHref = `/golf/practice?type=${encodeURIComponent(practicePlan.practiceType)}&focus=${encodeURIComponent(practicePlan.focusArea)}&drills=${encodeURIComponent(practicePlan.drills.join("|"))}`;
 
   const activity = [
     ...rounds.slice(0, 3).map((round) => ({
@@ -190,6 +201,34 @@ export default function Dashboard() {
         </Surface>
       </section>
 
+      <section className="mb-5 grid gap-5 xl:grid-cols-[1fr_0.9fr]">
+        <Surface>
+          <SectionTitle eyebrow="Coach Notes" title="This week's focus" />
+          <div className="grid gap-3 md:grid-cols-3">
+            <CoachNote title="Golf" text={coachNotes.golf} tone="golf" />
+            <CoachNote title="Training" text={coachNotes.training} tone="lab" />
+            <CoachNote title="Recovery" text={coachNotes.recovery} tone="pulse" />
+          </div>
+        </Surface>
+
+        <Surface className="border-golf/20 bg-golf/5">
+          <SectionTitle eyebrow="Recommended Practice" title={practicePlan.title} />
+          <p className="text-sm leading-relaxed text-muted">{practicePlan.detail}</p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {practicePlan.drills.map((drill) => (
+              <span key={drill} className="rounded-full bg-golf/10 px-3 py-1 text-xs font-semibold text-golf">
+                {drill}
+              </span>
+            ))}
+          </div>
+          <Link href={recommendedPracticeHref}>
+            <a className="mt-5 inline-flex">
+              <Button variant="golf">Start Recommended Practice</Button>
+            </a>
+          </Link>
+        </Surface>
+      </section>
+
       <section className="grid gap-5 xl:grid-cols-[1fr_1fr_0.8fr]">
         <Surface>
           <SectionTitle eyebrow="Golf Form" title="Scoring profile" />
@@ -236,11 +275,30 @@ export default function Dashboard() {
             ))}
           </div>
           <div className="mt-5 rounded-xl border border-pulse/15 bg-pulse/8 p-4">
-            <p className="text-sm font-semibold text-dark">Lab note</p>
-            <p className="mt-1 text-sm leading-relaxed text-muted">
-              Training reads as athletic performance, not just a gym add-on.
+            <p className="text-sm font-semibold text-dark">
+              {trainingIntel.topMuscle ? `Top load: ${trainingIntel.topMuscle.muscle}` : "Lab note"}
             </p>
+            <p className="mt-1 text-sm leading-relaxed text-muted">
+              {trainingIntel.recommendation}
+            </p>
+            {trainingIntel.recentPr && (
+              <p className="mt-3 text-sm font-semibold text-lab">
+                Recent signal: {trainingIntel.recentPr.name} {trainingIntel.recentPr.weight} kg
+              </p>
+            )}
+            {alternatives.length > 0 && (
+              <p className="mt-3 text-sm text-muted">
+                Alternatives: {alternatives.slice(0, 3).join(", ")}
+              </p>
+            )}
           </div>
+          {trainingIntel.muscleVolumes.length > 0 && (
+            <div className="mt-5 space-y-3">
+              {trainingIntel.muscleVolumes.slice(0, 4).map((item) => (
+                <MuscleBalance key={item.muscle} item={item} max={trainingIntel.muscleVolumes[0]?.volume || 1} />
+              ))}
+            </div>
+          )}
         </Surface>
 
         <Surface className="bg-dark text-white">
@@ -255,7 +313,7 @@ export default function Dashboard() {
           </div>
           <p className="leading-relaxed text-white/68">
             {rounds.length && workouts.length
-              ? "Pair one focused short-game practice with your next training session, then log another full round."
+              ? practicePlan.detail
               : "Start with one round and one training session so AthletiGolf can connect both sides of performance."}
           </p>
           <div className="mt-6 grid gap-2">
@@ -296,7 +354,57 @@ export default function Dashboard() {
           </div>
         </Surface>
       </section>
+
+      <section className="mt-5">
+        <Surface>
+          <SectionTitle eyebrow="Data Health" title="Unlock sharper intelligence" />
+          <div className="grid gap-3 md:grid-cols-4">
+            {dataHealth.map((item) => (
+              <DataHealthCard key={item.label} item={item} />
+            ))}
+          </div>
+        </Surface>
+      </section>
     </main>
+  );
+}
+
+function CoachNote({ title, text, tone }: { title: string; text: string; tone: "golf" | "lab" | "pulse" }) {
+  const toneClass = tone === "golf" ? "border-golf/20 bg-golf/8" : tone === "lab" ? "border-lab/20 bg-lab/8" : "border-pulse/20 bg-pulse/8";
+  return (
+    <div className={`rounded-xl border p-4 ${toneClass}`}>
+      <p className="text-xs font-bold uppercase tracking-[0.16em] text-muted">{title}</p>
+      <p className="mt-3 text-sm leading-relaxed text-dark">{text}</p>
+    </div>
+  );
+}
+
+function MuscleBalance({ item, max }: { item: { muscle: string; volume: number }; max: number }) {
+  const width = `${Math.min((item.volume / max) * 100, 100)}%`;
+  return (
+    <div>
+      <div className="mb-2 flex justify-between gap-3 text-sm">
+        <span className="font-medium text-muted">{item.muscle}</span>
+        <span className="font-semibold text-dark">{Math.round(item.volume)} kg</span>
+      </div>
+      <div className="h-2 rounded-full bg-steel/10">
+        <div className="h-full rounded-full bg-lab" style={{ width }} />
+      </div>
+    </div>
+  );
+}
+
+function DataHealthCard({ item }: { item: { label: string; detail: string; complete: boolean; current: number; target: number } }) {
+  return (
+    <div className="rounded-xl border border-line bg-white p-4">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <p className="font-semibold text-dark">{item.label}</p>
+        <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${item.complete ? "bg-golf/10 text-golf" : "bg-gold/15 text-gold"}`}>
+          {item.current}/{item.target}
+        </span>
+      </div>
+      <p className="text-sm text-muted">{item.detail}</p>
+    </div>
   );
 }
 

@@ -89,8 +89,32 @@ html[data-theme="dark"] .bg-white {
   background-color: #121b28;
 }
 
+html[data-theme="dark"] .bg-white\/50 {
+  background-color: rgba(18, 27, 40, 0.68);
+}
+
 html[data-theme="dark"] .bg-white\/55 {
   background-color: rgba(18, 27, 40, 0.72);
+}
+
+html[data-theme="dark"] .bg-white\/60 {
+  background-color: rgba(18, 27, 40, 0.76);
+}
+
+html[data-theme="dark"] .bg-white\/70 {
+  background-color: rgba(18, 27, 40, 0.84);
+}
+
+html[data-theme="dark"] .bg-red-50 {
+  background-color: rgba(127, 29, 29, 0.24);
+}
+
+html[data-theme="dark"] .border-red-200 {
+  border-color: rgba(248, 113, 113, 0.36);
+}
+
+html[data-theme="dark"] .text-red-700 {
+  color: #fca5a5;
 }
 
 html[data-theme="dark"] .bg-dark {

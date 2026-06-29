@@ -12,8 +12,12 @@ import {
   lowerIsBetterControl,
 } from "@/lib/golfStats";
 import {
+  getDataHealthChecklist,
+  getExerciseAlternatives,
   getPerformanceInsights,
+  getRecommendedPracticePlan,
   getRelationshipInsights,
+  getTrainingIntelligence,
   type PerformanceInsight,
   type RelationshipInsight,
 } from "@/lib/insights";
@@ -75,6 +79,11 @@ export default function Analytics() {
   );
   const performanceInsights = getPerformanceInsights(rounds, roundHoles, workouts, practices);
   const relationshipInsights = getRelationshipInsights(rounds, workouts);
+  const trainingIntel = getTrainingIntelligence(workouts);
+  const practicePlan = getRecommendedPracticePlan(rounds, roundHoles);
+  const dataHealth = getDataHealthChecklist(rounds, workouts, practices);
+  const alternatives = getExerciseAlternatives(trainingIntel.stalledLift?.name || trainingIntel.recentPr?.name);
+  const recommendedPracticeHref = `/golf/practice?type=${encodeURIComponent(practicePlan.practiceType)}&focus=${encodeURIComponent(practicePlan.focusArea)}&drills=${encodeURIComponent(practicePlan.drills.join("|"))}`;
 
   const biggestOpportunity =
     rounds.length === 0
@@ -221,8 +230,23 @@ export default function Analytics() {
                 <Metric label="This Week" value={`${workoutsThisWeek}`} color="bg-pulse" />
                 <Metric label="Exercises Logged" value={`${exerciseCount}`} color="bg-lab" />
                 <Metric label="Tracked Volume" value={`${Math.round(trainingVolume)} kg`} color="bg-pulse" />
-                <Metric label="Status" value={workouts.length ? "Active" : "-"} color="bg-dark" />
+                <Metric label="Top Muscle" value={trainingIntel.topMuscle?.muscle || "-"} color="bg-lab" />
+                <Metric label="Recent PR" value={trainingIntel.recentPr ? `${trainingIntel.recentPr.name} ${trainingIntel.recentPr.weight}kg` : "-"} color="bg-pulse" />
+                <Metric label="Training Focus" value={trainingIntel.stalledLift?.name || trainingIntel.topMuscle?.muscle || "Balanced"} color="bg-gold" />
               </div>
+              {trainingIntel.muscleVolumes.length > 0 && (
+                <div className="mt-6 space-y-3">
+                  {trainingIntel.muscleVolumes.slice(0, 5).map((item) => (
+                    <MuscleBalance key={item.muscle} item={item} max={trainingIntel.muscleVolumes[0]?.volume || 1} />
+                  ))}
+                </div>
+              )}
+              {alternatives.length > 0 && (
+                <div className="mt-5 rounded-xl border border-gold/20 bg-gold/10 p-4">
+                  <p className="text-sm font-semibold text-dark">Exercise alternatives</p>
+                  <p className="mt-1 text-sm text-muted">{alternatives.slice(0, 3).join(", ")}</p>
+                </div>
+              )}
             </Surface>
           </div>
         </div>
@@ -244,15 +268,19 @@ export default function Analytics() {
                 Log focused practice <ArrowUpRight className="h-4 w-4" />
               </a>
             </Link>
+            <Link href={recommendedPracticeHref}>
+              <a className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-golf">
+                Start recommended practice <ArrowUpRight className="h-4 w-4" />
+              </a>
+            </Link>
           </Surface>
 
           <Surface>
             <SectionTitle eyebrow="Data Health" title="Signal strength" />
             <div className="space-y-3">
-              <Health label="Rounds" value={rounds.length} target={5} tone="golf" />
-              <Health label="Distance rounds" value={rounds.filter((round) => round.average_driving_distance).length} target={3} tone="golf" />
-              <Health label="Training sessions" value={workouts.length} target={8} tone="lab" />
-              <Health label="This week" value={workoutsThisWeek} target={3} tone="pulse" />
+              {dataHealth.map((item) => (
+                <Health key={item.label} label={item.label} value={item.current} target={item.target} tone={item.complete ? "golf" : "pulse"} detail={item.detail} />
+              ))}
             </div>
           </Surface>
         </div>
@@ -386,11 +414,13 @@ function Health({
   value,
   target,
   tone,
+  detail,
 }: {
   label: string;
   value: number;
   target: number;
   tone: "golf" | "lab" | "pulse";
+  detail?: string;
 }) {
   const width = `${Math.min((value / target) * 100, 100)}%`;
   const color = tone === "golf" ? "bg-golf" : tone === "lab" ? "bg-lab" : "bg-pulse";
@@ -400,8 +430,24 @@ function Health({
         <p className="text-sm font-medium text-muted">{label}</p>
         <p className="font-semibold text-dark">{value}/{target}</p>
       </div>
+      {detail && <p className="mb-2 text-xs text-muted">{detail}</p>}
       <div className="h-2 rounded-full bg-steel/10">
         <div className={`h-full rounded-full ${color}`} style={{ width }} />
+      </div>
+    </div>
+  );
+}
+
+function MuscleBalance({ item, max }: { item: { muscle: string; volume: number }; max: number }) {
+  const width = `${Math.min((item.volume / max) * 100, 100)}%`;
+  return (
+    <div>
+      <div className="mb-2 flex justify-between gap-3 text-sm">
+        <span className="font-medium text-muted">{item.muscle}</span>
+        <span className="font-semibold text-dark">{Math.round(item.volume)} kg</span>
+      </div>
+      <div className="h-2 rounded-full bg-steel/10">
+        <div className="h-full rounded-full bg-lab" style={{ width }} />
       </div>
     </div>
   );

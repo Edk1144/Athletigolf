@@ -28,11 +28,43 @@ const drillOptionsMap: Record<PracticeType, string[]> = {
   "On Course": ["Penalty-Free Holes", "Conservative Targets", "Par Saves", "Routine Reps"],
 };
 
+const practiceTypes: PracticeType[] = ["Driving Range", "Putting", "Chipping", "Short Game", "On Course"];
+
+function isPracticeType(value: string | null): value is PracticeType {
+  return !!value && practiceTypes.includes(value as PracticeType);
+}
+
+function getInitialPracticePlan() {
+  if (typeof window === "undefined") {
+    return {
+      practiceType: "Driving Range" as PracticeType,
+      focusArea: "",
+      drills: [] as PracticeDrillForm[],
+      loadedFromPlan: false,
+    };
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  const typeParam = params.get("type");
+  const drillNames = (params.get("drills") || "")
+    .split("|")
+    .map((name) => name.trim())
+    .filter(Boolean);
+
+  return {
+    practiceType: isPracticeType(typeParam) ? typeParam : "Driving Range",
+    focusArea: params.get("focus") || "",
+    drills: drillNames.map((name) => ({ name, distance: "", attempts: "", successes: "" })),
+    loadedFromPlan: !!(typeParam || params.get("focus") || drillNames.length),
+  };
+}
+
 export default function PracticeSession() {
-  const [practiceType, setPracticeType] = useState<PracticeType>("Driving Range");
+  const [initialPlan] = useState(getInitialPracticePlan);
+  const [practiceType, setPracticeType] = useState<PracticeType>(initialPlan.practiceType);
   const [durationMinutes, setDurationMinutes] = useState("");
-  const [focusArea, setFocusArea] = useState("");
-  const [drills, setDrills] = useState<PracticeDrillForm[]>([]);
+  const [focusArea, setFocusArea] = useState(initialPlan.focusArea);
+  const [drills, setDrills] = useState<PracticeDrillForm[]>(initialPlan.drills);
   const [rating, setRating] = useState("");
   const [notes, setNotes] = useState("");
   const [submitted, setSubmitted] = useState(false);
@@ -119,6 +151,17 @@ export default function PracticeSession() {
         </div>
 
         <form onSubmit={handleSubmit} className="rounded-xl border border-line bg-panel p-6 shadow-sm">
+          {initialPlan.loadedFromPlan && (
+            <div className="mb-6 rounded-xl border border-golf/25 bg-golf/10 p-4">
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-golf">
+                Recommended Practice Loaded
+              </p>
+              <p className="mt-2 text-sm text-muted">
+                This session has been pre-filled from your current golf stats. Change anything you want before saving.
+              </p>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             <div>
               <FieldLabel>Practice Type</FieldLabel>

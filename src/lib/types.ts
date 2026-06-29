@@ -118,5 +118,6 @@ export type SplitDay = {
   day_name: string;
   split_name: string;
   exercises: string[];
+  archived_at?: string | null;
   created_at: string;
 };

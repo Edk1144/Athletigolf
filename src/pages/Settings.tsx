@@ -6,9 +6,8 @@ import { applyTheme, type AppTheme } from "@/lib/theme";
 type SaveState = "idle" | "saving" | "success" | "error";
 
 const THEMES = [
-  { value: "default", label: "Default" },
-  { value: "dark", label: "Dark" },
   { value: "light", label: "Light" },
+  { value: "dark", label: "Dark" },
 ];
 
 export default function Settings() {
@@ -27,7 +26,7 @@ export default function Settings() {
     main_goal: "",
     distance_unit: "yards",
     weight_unit: "kg",
-    theme: "default",
+    theme: "light",
     notifications_enabled: false,
   });
 
@@ -54,7 +53,7 @@ export default function Settings() {
       .maybeSingle();
 
     if (data) {
-      const theme = data.theme || "default";
+      const theme = data.theme === "dark" ? "dark" : "light";
       setProfile({
         full_name: data.full_name || "",
         golf_handicap: data.golf_handicap?.toString() || "",

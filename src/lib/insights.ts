@@ -1,5 +1,6 @@
-import type { ExerciseLog, PracticeSession, Round, RoundHole, Workout } from "@/lib/types";
+import type { ExerciseLog, PracticeDrill, PracticeSession, Round, RoundHole, Workout } from "@/lib/types";
 import { getGolfStats, getShortGameStats } from "@/lib/golfStats";
+import { findExercise } from "@/lib/exerciseLibrary";
 
 export type InsightTone = "golf" | "lab" | "pulse" | "warning";
 
@@ -16,6 +17,43 @@ export type RelationshipInsight = {
   detail: string;
   tone: InsightTone;
   confidence: "early" | "building" | "strong";
+};
+
+export type MuscleVolume = {
+  muscle: string;
+  volume: number;
+  exercises: number;
+};
+
+export type TrainingIntelligence = {
+  totalVolume: number;
+  muscleVolumes: MuscleVolume[];
+  topMuscle: MuscleVolume | null;
+  recentPr: { name: string; weight: number } | null;
+  stalledLift: { name: string; current: number; previous: number } | null;
+  recommendation: string;
+};
+
+export type PracticePlan = {
+  title: string;
+  detail: string;
+  practiceType: string;
+  focusArea: string;
+  drills: string[];
+};
+
+export type CoachNotes = {
+  golf: string;
+  training: string;
+  recovery: string;
+};
+
+export type DataHealthItem = {
+  label: string;
+  detail: string;
+  complete: boolean;
+  current: number;
+  target: number;
 };
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -119,7 +157,7 @@ export function getPerformanceInsights(
   const weeklyPractices = practices.filter(
     (practice) => new Date(practice.created_at).getTime() >= Date.now() - 7 * MS_PER_DAY
   );
-  const drillPractices = practices.filter((practice) => practice.drill_name);
+  const allPracticeDrills = practices.flatMap(getPracticeDrills);
 
   if (weeklyPractices.length >= 2) {
     insights.push({
@@ -131,10 +169,10 @@ export function getPerformanceInsights(
     });
   }
 
-  const bestDrill = findBestDrill(drillPractices);
+  const bestDrill = findBestDrill(practices);
   if (bestDrill) {
     insights.push({
-      title: `${bestDrill.drill_name} is now measurable`,
+      title: `${bestDrill.name} is now measurable`,
       detail: `Best logged drill rate is ${bestDrill.rate}%. Keep repeating this to connect practice quality with round outcomes.`,
       tone: "pulse",
       priority: 77,
@@ -148,6 +186,19 @@ export function getPerformanceInsights(
       priority: 62,
     });
   }
+
+  if (allPracticeDrills.length >= 2) {
+    insights.push({
+      title: `${allPracticeDrills.length} practice drills tracked`,
+      detail: "Practice is now becoming measurable across more than one drill, which gives future recommendations a better signal.",
+      tone: "pulse",
+      priority: 73,
+      metric: `${allPracticeDrills.length} drills`,
+    });
+  }
+
+  const practiceRecommendation = getPracticeRecommendation(golfStats, shortGameStats);
+  if (practiceRecommendation) insights.push(practiceRecommendation);
 
   if (weeklyWorkouts.length >= 3) {
     insights.push({
@@ -170,6 +221,27 @@ export function getPerformanceInsights(
     });
   }
 
+  const training = getTrainingIntelligence(workouts);
+  if (training.topMuscle && training.totalVolume > 0) {
+    insights.push({
+      title: `${training.topMuscle.muscle} is carrying training load`,
+      detail: `${Math.round(training.topMuscle.volume)} kg of recent logged volume sits here. Balance this against golf priorities and recovery.`,
+      tone: "lab",
+      priority: 71,
+      metric: `${Math.round(training.topMuscle.volume)} kg`,
+    });
+  }
+
+  if (training.stalledLift) {
+    insights.push({
+      title: `${training.stalledLift.name} may be stalling`,
+      detail: `Recent best is ${training.stalledLift.current} kg after previously reaching ${training.stalledLift.previous} kg. Consider an alternative movement or lighter technique block.`,
+      tone: "warning",
+      priority: 69,
+      metric: `${training.stalledLift.current} kg`,
+    });
+  }
+
   return insights.sort((a, b) => b.priority - a.priority).slice(0, 5);
 }
 
@@ -184,6 +256,7 @@ export function getRelationshipInsights(rounds: Round[], workouts: Workout[]): R
   );
   const recentVolume = getTrainingVolume(workouts, 28);
   const previousVolume = getTrainingVolume(workouts, 56) - recentVolume;
+  const pr = findBestRecentLift(workouts);
   const relationships: RelationshipInsight[] = [];
 
   if (rounds.length < 3 || workouts.length < 3) {
@@ -205,7 +278,9 @@ export function getRelationshipInsights(rounds: Round[], workouts: Workout[]): R
   ) {
     relationships.push({
       title: "Distance and training load are rising together",
-      detail: "Driving distance rose during the same period that tracked training volume increased. Useful link, not proof of cause yet.",
+      detail: pr
+        ? `Driving distance rose during the same period that training volume increased and ${pr.name} hit ${pr.weight} kg. Useful link, not proof of cause yet.`
+        : "Driving distance rose during the same period that tracked training volume increased. Useful link, not proof of cause yet.",
       tone: "lab",
       confidence: "building",
     });
@@ -230,6 +305,146 @@ export function getRelationshipInsights(rounds: Round[], workouts: Workout[]): R
   }
 
   return relationships.slice(0, 3);
+}
+
+export function getTrainingIntelligence(workouts: Workout[]): TrainingIntelligence {
+  const recentWorkouts = workouts.filter(
+    (workout) => new Date(workout.created_at).getTime() >= Date.now() - 28 * MS_PER_DAY
+  );
+  const muscleMap = new Map<string, MuscleVolume>();
+
+  for (const exercise of recentWorkouts.flatMap((workout) => workout.exercises || [])) {
+    const muscle = exercise.muscle_group || inferMuscleGroup(exercise);
+    const volume = exercise.volume ?? inferExerciseVolume(exercise) ?? 0;
+    const existing = muscleMap.get(muscle) || { muscle, volume: 0, exercises: 0 };
+    existing.volume += volume;
+    existing.exercises += 1;
+    muscleMap.set(muscle, existing);
+  }
+
+  const muscleVolumes = [...muscleMap.values()].sort((a, b) => b.volume - a.volume);
+  const topMuscle = muscleVolumes[0] ?? null;
+  const recentPr = findBestRecentLift(workouts);
+  const stalledLift = findStalledLift(workouts);
+  const totalVolume = muscleVolumes.reduce((sum, item) => sum + item.volume, 0);
+
+  return {
+    totalVolume,
+    muscleVolumes,
+    topMuscle,
+    recentPr,
+    stalledLift,
+    recommendation: getTrainingRecommendation(muscleVolumes, stalledLift, recentPr),
+  };
+}
+
+export function getRecommendedPracticePlan(rounds: Round[], holes: RoundHole[]): PracticePlan {
+  const golfStats = getGolfStats(rounds);
+  const shortGameStats = getShortGameStats(holes);
+
+  if ((golfStats.avgPenaltyShots ?? 0) >= 1.5) {
+    return {
+      title: "Tee-shot control session",
+      detail: "Penalties are the quickest scoring leak. Build a session around safer start lines and conservative targets.",
+      practiceType: "On Course",
+      focusArea: "Course Strategy",
+      drills: ["Penalty-Free Holes", "Conservative Targets"],
+    };
+  }
+
+  if ((golfStats.avgGirPercent ?? 100) < 55) {
+    return {
+      title: "Approach ladder session",
+      detail: "GIR is the clearest scoring lever. Work through wedge, short-iron and mid-iron target windows.",
+      practiceType: "Driving Range",
+      focusArea: "Mid Irons",
+      drills: ["Target Greens", "Shot Shape Ladder"],
+    };
+  }
+
+  if (shortGameStats.sandSaveChances >= 2 && (shortGameStats.sandSavePercent ?? 100) < 45) {
+    return {
+      title: "Bunker save session",
+      detail: "Sand saves need their own reps so bunker recovery is not hidden inside normal chipping.",
+      practiceType: "Short Game",
+      focusArea: "Bunker Play",
+      drills: ["Bunker Saves", "Random Lies"],
+    };
+  }
+
+  if (shortGameStats.chipChances >= 3 && (shortGameStats.upAndDownPercent ?? 100) < 45) {
+    return {
+      title: "Up-and-down conversion",
+      detail: "Missed greens need more one-putt recoveries. Track landing spot and conversion drills.",
+      practiceType: "Chipping",
+      focusArea: "Landing Spot",
+      drills: ["Landing Spot", "One-Putt Conversion"],
+    };
+  }
+
+  if ((golfStats.avgPutts ?? 0) >= 36) {
+    return {
+      title: "Pace putting block",
+      detail: "Putting volume is high enough to make speed control the best next practice block.",
+      practiceType: "Putting",
+      focusArea: "Speed Control",
+      drills: ["Lag Circle", "3ft Makes"],
+    };
+  }
+
+  return {
+    title: "Balanced scoring maintenance",
+    detail: "No single golf leak is dominating yet. Keep one full-swing drill and one short-game drill in the week.",
+    practiceType: "Driving Range",
+    focusArea: "Shot Shape",
+    drills: ["Fairway Finder", "Target Greens"],
+  };
+}
+
+export function getCoachNotes(
+  rounds: Round[],
+  holes: RoundHole[],
+  workouts: Workout[],
+  practices: PracticeSession[] = []
+): CoachNotes {
+  const plan = getRecommendedPracticePlan(rounds, holes);
+  const training = getTrainingIntelligence(workouts);
+  const recentPracticeCount = practices.filter(
+    (practice) => new Date(practice.created_at).getTime() >= Date.now() - 7 * MS_PER_DAY
+  ).length;
+
+  return {
+    golf: plan.detail,
+    training: training.recommendation,
+    recovery:
+      workouts.length >= 3 && recentPracticeCount >= 2
+        ? "You have enough recent workload to protect recovery. Keep one easier session before the next full round."
+        : "Build consistency first: one round, one focused practice session and one structured training log this week.",
+  };
+}
+
+export function getDataHealthChecklist(
+  rounds: Round[],
+  workouts: Workout[],
+  practices: PracticeSession[] = []
+): DataHealthItem[] {
+  const distanceRounds = rounds.filter((round) => round.average_driving_distance).length;
+  const practiceDrills = practices.reduce((sum, practice) => sum + getPracticeDrills(practice).length, 0);
+  const structuredWorkouts = workouts.filter((workout) =>
+    (workout.exercises || []).some((exercise) => exercise.weight_value || exercise.volume)
+  ).length;
+
+  return [
+    { label: "Rounds", detail: "Needed for scoring trends.", complete: rounds.length >= 5, current: rounds.length, target: 5 },
+    { label: "Distance rounds", detail: "Needed for golf-speed relationships.", complete: distanceRounds >= 3, current: distanceRounds, target: 3 },
+    { label: "Practice drills", detail: "Needed for sharper practice recommendations.", complete: practiceDrills >= 6, current: practiceDrills, target: 6 },
+    { label: "Structured workouts", detail: "Needed for muscle and lift intelligence.", complete: structuredWorkouts >= 6, current: structuredWorkouts, target: 6 },
+  ];
+}
+
+export function getExerciseAlternatives(exerciseName: string | null | undefined) {
+  if (!exerciseName) return [];
+  return findExercise(exerciseName)?.alternatives || [];
 }
 
 function sortedRounds(rounds: Round[]) {
@@ -267,20 +482,157 @@ function findBestRecentLift(workouts: Workout[]) {
 
 function findBestDrill(practices: PracticeSession[]) {
   const scored = practices
-    .map((practice) => {
-      if (!practice.drill_name || !practice.drill_attempts || practice.drill_attempts <= 0) {
+    .flatMap(getPracticeDrills)
+    .map((drill) => {
+      if (!drill.name || !drill.attempts || drill.attempts <= 0) {
         return null;
       }
-      const successes = practice.drill_successes ?? 0;
+      const successes = drill.successes ?? 0;
       return {
-        drill_name: practice.drill_name,
-        rate: Math.round((successes / practice.drill_attempts) * 100),
+        name: drill.name,
+        rate: Math.round((successes / drill.attempts) * 100),
       };
     })
-    .filter((practice): practice is { drill_name: string; rate: number } => practice !== null)
+    .filter((practice): practice is { name: string; rate: number } => practice !== null)
     .sort((a, b) => b.rate - a.rate);
 
   return scored[0] ?? null;
+}
+
+function getPracticeDrills(practice: PracticeSession): PracticeDrill[] {
+  if (Array.isArray(practice.drills) && practice.drills.length > 0) return practice.drills;
+  if (!practice.drill_name && !practice.drill_distance && !practice.drill_attempts && !practice.drill_successes) {
+    return [];
+  }
+  return [
+    {
+      name: practice.drill_name || "",
+      distance: practice.drill_distance || null,
+      attempts: practice.drill_attempts ?? null,
+      successes: practice.drill_successes ?? null,
+    },
+  ];
+}
+
+function getPracticeRecommendation(
+  golfStats: ReturnType<typeof getGolfStats>,
+  shortGameStats: ReturnType<typeof getShortGameStats>
+): PerformanceInsight | null {
+  if ((golfStats.avgPenaltyShots ?? 0) >= 1.5) {
+    return {
+      title: "Practice plan: tee-shot decisions",
+      detail: "Penalties are high enough that course-management practice should come before chasing extra speed.",
+      tone: "warning",
+      priority: 90,
+      metric: `${golfStats.avgPenaltyShots?.toFixed(1)} pens`,
+    };
+  }
+  if ((golfStats.avgGirPercent ?? 100) < 55) {
+    return {
+      title: "Practice plan: approach ladder",
+      detail: "GIR is the clearest route to better scoring. Build range sessions around wedge, short iron and mid-iron target windows.",
+      tone: "pulse",
+      priority: 86,
+      metric: `${golfStats.avgGirPercent}% GIR`,
+    };
+  }
+  if (shortGameStats.sandSaveChances >= 2 && (shortGameStats.sandSavePercent ?? 100) < 45) {
+    return {
+      title: "Practice plan: bunker saves",
+      detail: "Sand-save rate is low enough to deserve its own drill block rather than being blended into normal chipping.",
+      tone: "warning",
+      priority: 83,
+      metric: `${shortGameStats.sandSavePercent}%`,
+    };
+  }
+  if (shortGameStats.chipChances >= 3 && (shortGameStats.upAndDownPercent ?? 100) < 45) {
+    return {
+      title: "Practice plan: one-putt chips",
+      detail: "Up-and-down rate points to short-game conversion. Track landing spot drills and one-putt conversion separately.",
+      tone: "golf",
+      priority: 81,
+      metric: `${shortGameStats.upAndDownPercent}%`,
+    };
+  }
+  if ((golfStats.avgPutts ?? 0) >= 36) {
+    return {
+      title: "Practice plan: pace putting",
+      detail: "Putting volume is high enough that lag putting and start-line drills should be a regular practice block.",
+      tone: "golf",
+      priority: 79,
+      metric: `${golfStats.avgPutts?.toFixed(1)} putts`,
+    };
+  }
+  return null;
+}
+
+function findStalledLift(workouts: Workout[]) {
+  const recentStart = Date.now() - 28 * MS_PER_DAY;
+  const previousStart = Date.now() - 56 * MS_PER_DAY;
+  const recentBest = new Map<string, { name: string; weight: number }>();
+  const previousBest = new Map<string, { name: string; weight: number }>();
+
+  for (const workout of workouts) {
+    const date = new Date(workout.created_at).getTime();
+    for (const exercise of workout.exercises || []) {
+      const weight = exercise.weight_value ?? Number.parseFloat(exercise.weight || "0");
+      const name = exercise.name?.trim();
+      if (!name || !Number.isFinite(weight) || weight <= 0) continue;
+      const key = name.toLowerCase();
+      const target = date >= recentStart ? recentBest : date >= previousStart ? previousBest : null;
+      if (!target) continue;
+      const existing = target.get(key);
+      if (!existing || weight > existing.weight) target.set(key, { name, weight });
+    }
+  }
+
+  for (const [key, previous] of previousBest) {
+    const recent = recentBest.get(key);
+    if (recent && recent.weight <= previous.weight) {
+      return { name: recent.name, current: recent.weight, previous: previous.weight };
+    }
+  }
+  return null;
+}
+
+function getTrainingRecommendation(
+  muscleVolumes: MuscleVolume[],
+  stalledLift: { name: string; current: number; previous: number } | null,
+  recentPr: { name: string; weight: number } | null
+) {
+  if (stalledLift) {
+    return `${stalledLift.name} looks flat. Try a variation, lower-load technique block, or different rep range next.`;
+  }
+  if (recentPr) {
+    return `${recentPr.name} is your strongest recent signal. Keep it, but protect recovery so golf practice quality stays high.`;
+  }
+  if (muscleVolumes.length === 0) {
+    return "Log structured sets, reps and load so AthletiGolf can read training progression.";
+  }
+  const muscles = new Set(muscleVolumes.map((item) => item.muscle));
+  if (!muscles.has("Core") && !muscles.has("Posterior Chain")) {
+    return "Add core or posterior-chain work so training supports rotation and posture, not just general strength.";
+  }
+  return "Training is structured enough to compare against golf trends. Keep logging load, sets and reps consistently.";
+}
+
+function inferMuscleGroup(exercise: ExerciseLog) {
+  const lower = exercise.name?.toLowerCase() || "";
+  if (/(bench|press|chest|push)/.test(lower)) return "Chest / Push";
+  if (/(row|pulldown|pull|lat|rear delt)/.test(lower)) return "Back / Pull";
+  if (/(squat|leg|rdl|hamstring|calf|lower)/.test(lower)) return "Legs";
+  if (/(curl|tricep|arm)/.test(lower)) return "Arms";
+  if (/(shoulder|lateral|delt)/.test(lower)) return "Shoulders";
+  if (/(core|abs|plank|rotation|pallof)/.test(lower)) return "Core";
+  return "Unmapped";
+}
+
+function inferExerciseVolume(exercise: ExerciseLog) {
+  const weight = exercise.weight_value ?? Number.parseFloat(exercise.weight || "0");
+  const sets = exercise.sets_value ?? Number.parseFloat(exercise.sets || "0");
+  const reps = exercise.reps_value ?? Number.parseFloat(exercise.reps || "0");
+  if (![weight, sets, reps].every(Number.isFinite)) return null;
+  return weight * sets * reps;
 }
 
 function average(values: number[]) {

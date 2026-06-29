@@ -45,6 +45,7 @@ export default function SubmitSession() {
       const { data, error } = await supabase
         .from("split_days")
         .select("*")
+        .is("archived_at", null)
         .order("created_at", { ascending: true });
 
       if (!error && data && data.length > 0) {
