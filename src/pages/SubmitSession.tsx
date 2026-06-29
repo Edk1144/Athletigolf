@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Activity, Dumbbell, Plus, Trash2 } from "lucide-react";
 import { Button, FieldLabel, PageHeader, StatusPill, Surface, TextInput } from "@/components/ui";
+import { findExercise, inferExerciseMuscle } from "@/lib/exerciseLibrary";
 import { supabase } from "@/lib/supabase";
 import type { SplitDay } from "@/lib/types";
 
@@ -210,6 +211,11 @@ export default function SubmitSession() {
                     className="grid gap-3 rounded-xl border border-line bg-white p-3 lg:grid-cols-[1.3fr_0.7fr_0.55fr_0.55fr_1fr_44px] lg:items-end"
                   >
                     <LogField label="Exercise" value={exercise.name} onChange={(value) => updateExercise(index, "name", value)} placeholder="Exercise name" />
+                    {findExercise(exercise.name) && (
+                      <p className="text-xs font-medium text-muted lg:hidden">
+                        {findExercise(exercise.name)?.primaryMuscle} · {findExercise(exercise.name)?.equipment}
+                      </p>
+                    )}
                     <LogField label="Load" value={exercise.weight} onChange={(value) => updateExercise(index, "weight", value)} placeholder="75kg" />
                     <LogField label="Sets" value={exercise.sets} onChange={(value) => updateExercise(index, "sets", value)} placeholder="3" />
                     <LogField label="Reps" value={exercise.reps} onChange={(value) => updateExercise(index, "reps", value)} placeholder="8" />
@@ -275,7 +281,8 @@ function structureExerciseLog(exercise: ExerciseLog) {
     sets_value: setsValue,
     reps_value: repsValue,
     volume,
-    muscle_group: inferMuscleGroup(exercise.name),
+    muscle_group: inferExerciseMuscle(exercise.name),
+    library_match: findExercise(exercise.name),
   };
 }
 
@@ -284,17 +291,6 @@ function parseTrainingNumber(value: string) {
   if (!match) return null;
   const parsed = Number(match[0]);
   return Number.isFinite(parsed) ? parsed : null;
-}
-
-function inferMuscleGroup(name: string) {
-  const lower = name.toLowerCase();
-  if (/(bench|press|chest|push)/.test(lower)) return "Chest / Push";
-  if (/(row|pulldown|pull|lat|rear delt)/.test(lower)) return "Back / Pull";
-  if (/(squat|leg|rdl|hamstring|calf|lower)/.test(lower)) return "Legs";
-  if (/(curl|tricep|arm)/.test(lower)) return "Arms";
-  if (/(shoulder|lateral|delt)/.test(lower)) return "Shoulders";
-  if (/(core|abs|plank)/.test(lower)) return "Core";
-  return null;
 }
 
 function ConsoleMetric({ label, value }: { label: string; value: React.ReactNode }) {

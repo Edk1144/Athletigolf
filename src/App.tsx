@@ -1,5 +1,7 @@
+import { useEffect } from "react";
 import { Switch, Route, Redirect, useLocation } from "wouter";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/lib/supabase";
 import MobileSidebar from "@/components/MobileSidebar";
 import Landing from "@/pages/Landing";
 import AuthPage from "@/pages/Auth";
@@ -14,6 +16,7 @@ import GolfQuiz from "@/pages/GolfQuiz";
 import RoundTracker from "@/pages/RoundTracker";
 import ComingSoon from "@/pages/ComingSoon";
 import { applyTextAutoFormatToField } from "@/lib/textFormatting";
+import { applyTheme, getStoredTheme } from "@/lib/theme";
 import PracticeSession from "./pages/PracticeSession";
 import PracticeHistory from "./pages/PracticeHistory";
 import PreviousWorkouts from "./pages/PreviousWorkouts";
@@ -37,7 +40,31 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 function AppShell() {
   const [location] = useLocation();
+  const { user } = useAuth();
   const hideSidebar = location === "/" || location === "/auth";
+
+  useEffect(() => {
+    applyTheme(getStoredTheme());
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
+
+    let cancelled = false;
+
+    supabase
+      .from("profiles")
+      .select("theme")
+      .eq("id", user.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!cancelled) applyTheme(data?.theme || getStoredTheme());
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
 
  return (
   <div

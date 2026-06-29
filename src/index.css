@@ -22,11 +22,102 @@ html {
   background: #eef2f6;
 }
 
+html[data-theme="light"] {
+  --color-cream: #f7f9fc;
+  --color-dark: #090f18;
+  --color-panel: #ffffff;
+  --color-ink: #0f172a;
+  --color-muted: #5f6f84;
+  --color-line: #d9e1ec;
+  --color-steel: #26364a;
+}
+
+html[data-theme="dark"] {
+  --color-cream: #070b12;
+  --color-dark: #080d15;
+  --color-panel: #101722;
+  --color-ink: #e8eef8;
+  --color-muted: #9aa7b8;
+  --color-line: #293447;
+  --color-steel: #1a2635;
+  --color-golf: #2f9b78;
+  --color-lab: #6f83d8;
+  --color-gym: #6f83d8;
+  --color-pulse: #1ea8c2;
+  --color-gold: #c79a4b;
+  --color-warning: #d08a38;
+  --color-danger: #d7665d;
+}
+
 body {
   color: #101828;
   background:
     radial-gradient(circle at top right, rgba(0, 166, 200, 0.1), transparent 28rem),
     linear-gradient(180deg, #f7f9fc 0%, #eef2f6 45%, #e8edf4 100%);
+}
+
+html[data-theme="light"] body {
+  color: #0f172a;
+  background:
+    radial-gradient(circle at top right, rgba(0, 166, 200, 0.08), transparent 28rem),
+    linear-gradient(180deg, #ffffff 0%, #f7f9fc 48%, #edf2f8 100%);
+}
+
+html[data-theme="dark"] body {
+  color: #e8eef8;
+  background:
+    radial-gradient(circle at top right, rgba(30, 168, 194, 0.12), transparent 30rem),
+    linear-gradient(180deg, #0b111c 0%, #070b12 48%, #05080d 100%);
+}
+
+html[data-theme="dark"] input,
+html[data-theme="dark"] select,
+html[data-theme="dark"] textarea {
+  background-color: #111a27;
+  color: #e8eef8;
+}
+
+html[data-theme="dark"] .bg-cream {
+  background-color: #070b12;
+}
+
+html[data-theme="dark"] .bg-panel {
+  background-color: #101722;
+}
+
+html[data-theme="dark"] .bg-white {
+  background-color: #121b28;
+}
+
+html[data-theme="dark"] .bg-white\/55 {
+  background-color: rgba(18, 27, 40, 0.72);
+}
+
+html[data-theme="dark"] .bg-dark {
+  background-color: #080d15;
+}
+
+html[data-theme="dark"] .text-dark,
+html[data-theme="dark"] .text-ink,
+html[data-theme="dark"] .text-black,
+html[data-theme="dark"] .text-slate-950 {
+  color: #e8eef8;
+}
+
+html[data-theme="dark"] .text-black\/60,
+html[data-theme="dark"] .text-black\/50,
+html[data-theme="dark"] .text-black\/40 {
+  color: rgba(232, 238, 248, 0.64);
+}
+
+html[data-theme="dark"] .border-line {
+  border-color: #293447;
+}
+
+html[data-theme="dark"] .shadow-sm,
+html[data-theme="dark"] .shadow-xl,
+html[data-theme="dark"] .shadow-2xl {
+  box-shadow: none;
 }
 
 ::selection {

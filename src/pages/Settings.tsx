@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
+import { applyTheme, type AppTheme } from "@/lib/theme";
 
 type SaveState = "idle" | "saving" | "success" | "error";
 
@@ -53,6 +54,7 @@ export default function Settings() {
       .maybeSingle();
 
     if (data) {
+      const theme = data.theme || "default";
       setProfile({
         full_name: data.full_name || "",
         golf_handicap: data.golf_handicap?.toString() || "",
@@ -61,9 +63,10 @@ export default function Settings() {
         main_goal: data.main_goal || "",
         distance_unit: data.distance_unit || "yards",
         weight_unit: data.weight_unit || "kg",
-        theme: data.theme || "default",
+        theme,
         notifications_enabled: data.notifications_enabled ?? false,
       });
+      applyTheme(theme);
     }
 
     setLoading(false);
@@ -111,6 +114,7 @@ export default function Settings() {
   function set<K extends keyof typeof profile>(key: K, value: (typeof profile)[K]) {
     setSaveState("idle");
     setProfile((prev) => ({ ...prev, [key]: value }));
+    if (key === "theme") applyTheme(value as AppTheme);
   }
 
   if (loading) {
@@ -247,7 +251,7 @@ export default function Settings() {
               {THEMES.map((t) => (
                 <button
                   key={t.value}
-                  onClick={() => set("theme", t.value)}
+                  onClick={() => set("theme", t.value as AppTheme)}
                   className={`rounded-full px-5 py-3 text-sm font-medium transition border ${
                     profile.theme === t.value
                       ? "bg-black text-white border-black"
