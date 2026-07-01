@@ -5,7 +5,33 @@ export type Profile = {
   height: string | null;
   weight: string | null;
   golf_handicap: number | null;
+  main_goal?: string | null;
+  onboarding_completed?: boolean | null;
+  onboarding_completed_at?: string | null;
+  onboarding_data?: OnboardingData | null;
   created_at: string;
+};
+
+export type OnboardingData = {
+  fullName: string;
+  mainGoal: string;
+  golf: {
+    homeCourse: string;
+    handicap: string;
+    scoringGoal: string;
+    biggestWeakness: string;
+    practiceAvailability: string;
+    upcomingCompetition: string;
+  };
+  training: {
+    experience: string;
+    daysAvailable: string;
+    sessionLength: string;
+    equipment: string;
+    goal: string;
+    injuries: string;
+    restDays: string[];
+  };
 };
 
 export type Round = {

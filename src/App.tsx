@@ -6,6 +6,7 @@ import MobileSidebar from "@/components/MobileSidebar";
 import Landing from "@/pages/Landing";
 import AuthPage from "@/pages/Auth";
 import Dashboard from "@/pages/Dashboard";
+import Onboarding from "@/pages/Onboarding";
 import Profile from "@/pages/Profile";
 import Analytics from "@/pages/Analytics";
 import RoundHistory from "@/pages/RoundHistory";
@@ -40,9 +41,9 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function AppShell() {
-  const [location] = useLocation();
+  const [location, navigate] = useLocation();
   const { user } = useAuth();
-  const hideSidebar = location === "/" || location === "/auth";
+  const hideSidebar = location === "/" || location === "/auth" || location === "/onboarding";
 
   useEffect(() => {
     applyTheme(getStoredTheme());
@@ -67,6 +68,28 @@ function AppShell() {
     };
   }, [user]);
 
+  useEffect(() => {
+    if (!user || location === "/auth" || location === "/" || location === "/onboarding") return;
+
+    let cancelled = false;
+
+    supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", user.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (cancelled) return;
+        if (!data || data.onboarding_completed !== true) {
+          navigate("/onboarding");
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [location, navigate, user]);
+
  return (
   <div
     className="min-h-screen bg-cream font-sans text-ink"
@@ -81,6 +104,12 @@ function AppShell() {
 
       <Route path="/" component={Landing} />
       <Route path="/auth" component={AuthPage} />
+
+      <Route path="/onboarding">
+        <ProtectedRoute>
+          <Onboarding />
+        </ProtectedRoute>
+      </Route>
 
       <Route path="/dashboard">
         <ProtectedRoute>

@@ -295,6 +295,22 @@ export default function Settings() {
             </label>
           </div>
 
+          {/* ONBOARDING */}
+          <div className="rounded-xl border border-line bg-panel p-6 shadow-sm">
+            <h2 className="mb-2 text-2xl font-semibold text-dark">Setup Profile</h2>
+            <p className="mb-6 text-muted">
+              Revisit your golf baseline, training setup and starting recommendations.
+            </p>
+
+            <button
+              type="button"
+              onClick={() => navigate("/onboarding")}
+              className="rounded-lg bg-pulse px-5 py-3 text-sm font-semibold text-white transition hover:bg-pulse/90"
+            >
+              Edit Setup Answers
+            </button>
+          </div>
+
         </section>
 
         {/* ACCOUNT CONTROLS */}

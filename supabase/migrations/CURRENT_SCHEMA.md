@@ -31,6 +31,9 @@ Required columns:
 - `weight_unit text default 'kg'`
 - `theme text`
 - `notifications_enabled boolean default false`
+- `onboarding_completed boolean default false`
+- `onboarding_completed_at timestamptz`
+- `onboarding_data jsonb default '{}'::jsonb`
 - `created_at timestamptz`
 - `updated_at timestamptz`
 
