@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "wouter";
+import { useLocation } from "wouter";
 import {
   Activity,
   ArrowUpRight,
@@ -37,6 +37,7 @@ import {
 import type { ExerciseLog, PracticeSession, Round, RoundHole, Workout } from "@/lib/types";
 
 export default function Dashboard() {
+  const [, navigate] = useLocation();
   const { user } = useAuth();
   const [rounds, setRounds] = useState<Round[]>([]);
   const [roundHoles, setRoundHoles] = useState<RoundHole[]>([]);
@@ -125,11 +126,9 @@ export default function Dashboard() {
                 Golf form, training load and next actions in one tighter command view.
               </p>
               <div className="mt-6 flex flex-wrap gap-2">
-                <Link href="/golf/submit"><a><Button variant="golf"><Flag className="h-4 w-4" />Round</Button></a></Link>
-                <Link href="/workouts/submit"><a><Button variant="pulse"><Dumbbell className="h-4 w-4" />Training</Button></a></Link>
-                <Link href="/golf/practice">
-                  <a><Button variant="secondary" className="border-white/15 bg-white/10 text-white hover:bg-white/15"><NotebookPen className="h-4 w-4" />Practice</Button></a>
-                </Link>
+                <Button variant="golf" onClick={() => navigate("/golf/submit")}><Flag className="h-4 w-4" />Round</Button>
+                <Button variant="pulse" onClick={() => navigate("/workouts/submit")}><Dumbbell className="h-4 w-4" />Training</Button>
+                <Button variant="secondary" onClick={() => navigate("/golf/practice")} className="border-white/15 bg-white/10 text-white hover:bg-white/15"><NotebookPen className="h-4 w-4" />Practice</Button>
               </div>
             </div>
 
@@ -221,11 +220,9 @@ export default function Dashboard() {
               </span>
             ))}
           </div>
-          <Link href={recommendedPracticeHref}>
-            <a className="mt-5 inline-flex">
-              <Button variant="golf">Start Recommended Practice</Button>
-            </a>
-          </Link>
+          <Button variant="golf" onClick={() => navigate(recommendedPracticeHref)} className="mt-5">
+            Start Recommended Practice
+          </Button>
         </Surface>
       </section>
 
@@ -258,7 +255,7 @@ export default function Dashboard() {
             <EmptyState
               title="No golf form yet"
               description="Submit a round to build the scoring profile."
-              action={<Link href="/golf/submit"><a><Button variant="golf">Submit Round</Button></a></Link>}
+              action={<Button variant="golf" onClick={() => navigate("/golf/submit")}>Submit Round</Button>}
             />
           )}
         </Surface>
@@ -317,8 +314,8 @@ export default function Dashboard() {
               : "Start with one round and one training session so AthletiGolf can connect both sides of performance."}
           </p>
           <div className="mt-6 grid gap-2">
-            <Link href="/golf/practice"><a><Button variant="pulse" className="w-full">Log Practice</Button></a></Link>
-            <Link href="/analytics"><a><Button variant="secondary" className="w-full border-white/15 bg-white/10 text-white hover:bg-white/15">Open Report</Button></a></Link>
+            <Button variant="pulse" onClick={() => navigate("/golf/practice")} className="w-full">Log Practice</Button>
+            <Button variant="secondary" onClick={() => navigate("/analytics")} className="w-full border-white/15 bg-white/10 text-white hover:bg-white/15">Open Report</Button>
           </div>
         </Surface>
       </section>
@@ -576,18 +573,16 @@ function Action({
       : "bg-dark text-white";
 
   return (
-    <Link href={href}>
-      <a className="group rounded-xl border border-line bg-white p-4 transition hover:border-steel/25">
-        <div className="mb-4 flex items-center justify-between">
-          <span className={`inline-flex h-10 w-10 items-center justify-center rounded-lg ${toneClass}`}>
-            <Icon className="h-5 w-5" />
-          </span>
-          <ArrowUpRight className="h-4 w-4 text-muted transition group-hover:text-dark" />
-        </div>
-        <h3 className="font-semibold text-dark">{title}</h3>
-        <p className="mt-1 text-sm text-muted">{text}</p>
-      </a>
-    </Link>
+    <a href={href} className="group rounded-xl border border-line bg-white p-4 transition hover:border-steel/25">
+      <div className="mb-4 flex items-center justify-between">
+        <span className={`inline-flex h-10 w-10 items-center justify-center rounded-lg ${toneClass}`}>
+          <Icon className="h-5 w-5" />
+        </span>
+        <ArrowUpRight className="h-4 w-4 text-muted transition group-hover:text-dark" />
+      </div>
+      <h3 className="font-semibold text-dark">{title}</h3>
+      <p className="mt-1 text-sm text-muted">{text}</p>
+    </a>
   );
 }
 

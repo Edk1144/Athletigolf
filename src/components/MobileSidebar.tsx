@@ -59,6 +59,7 @@ const titles: Record<string, { title: string; section: string }> = {
   "/profile": { title: "Athlete Profile", section: "Account" },
   "/memberships": { title: "Memberships", section: "Billing" },
   "/workouts": { title: "Training Board", section: "Performance Lab" },
+  "/workouts/archive": { title: "Archived Splits", section: "Performance Lab" },
   "/workouts/submit": { title: "Training Console", section: "Performance Lab" },
   "/gym/history": { title: "Training Logbook", section: "Performance Lab" },
   "/golf": { title: "Round History", section: "Golf" },
@@ -74,7 +75,7 @@ export default function MobileSidebar() {
   const [open, setOpen] = useState(false);
   const [trainingOpen, setTrainingOpen] = useState(true);
   const [golfOpen, setGolfOpen] = useState(true);
-  const [location] = useLocation();
+  const [location, navigate] = useLocation();
   const meta = titles[location] ?? { title: "AthletiGolf", section: "Performance" };
   const today = useMemo(
     () =>
@@ -113,12 +114,8 @@ export default function MobileSidebar() {
           </div>
 
           <div className="hidden items-center gap-3 md:flex">
-            <Link href="/workouts/submit">
-              <a><Button variant="pulse">Training</Button></a>
-            </Link>
-            <Link href="/golf/submit">
-              <a><Button variant="golf">Round</Button></a>
-            </Link>
+            <Button variant="pulse" onClick={() => navigate("/workouts/submit")}>Training</Button>
+            <Button variant="golf" onClick={() => navigate("/golf/submit")}>Round</Button>
           </div>
 
           <button
@@ -255,20 +252,19 @@ function MenuLink({
       : "text-white/75";
 
   return (
-    <Link href={item.href}>
-      <a
-        onClick={onClick}
-        className={`flex items-center gap-3 rounded-lg px-3 transition ${
-          compact ? "py-2.5 text-sm" : "py-3 text-sm font-semibold"
-        } ${
-          isActive
-            ? "bg-white text-dark shadow-sm"
-            : `${toneClass} hover:bg-white/10 hover:text-white`
-        }`}
-      >
-        <Icon className="h-5 w-5 shrink-0" />
-        <span>{item.label}</span>
-      </a>
+    <Link
+      href={item.href}
+      onClick={onClick}
+      className={`flex items-center gap-3 rounded-lg px-3 transition ${
+        compact ? "py-2.5 text-sm" : "py-3 text-sm font-semibold"
+      } ${
+        isActive
+          ? "bg-white text-dark shadow-sm"
+          : `${toneClass} hover:bg-white/10 hover:text-white`
+      }`}
+    >
+      <Icon className="h-5 w-5 shrink-0" />
+      <span>{item.label}</span>
     </Link>
   );
 }

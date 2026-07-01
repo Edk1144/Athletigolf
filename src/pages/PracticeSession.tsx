@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { Button, FieldLabel, SelectInput, TextArea, TextInput } from "@/components/ui";
 import { supabase } from "@/lib/supabase";
 import type { PracticeDrill } from "@/lib/types";
@@ -60,6 +60,7 @@ function getInitialPracticePlan() {
 }
 
 export default function PracticeSession() {
+  const [, navigate] = useLocation();
   const [initialPlan] = useState(getInitialPracticePlan);
   const [practiceType, setPracticeType] = useState<PracticeType>(initialPlan.practiceType);
   const [durationMinutes, setDurationMinutes] = useState("");
@@ -109,8 +110,8 @@ export default function PracticeSession() {
           <h1 className="mb-4 text-4xl font-semibold">Practice Logged</h1>
           <p className="mb-8 text-muted">Nice work. Your practice session has been saved.</p>
           <div className="flex flex-col justify-center gap-4 sm:flex-row">
-            <Link href="/golf/practice"><a><Button variant="golf">Log Another</Button></a></Link>
-            <Link href="/golf/practice-history"><a><Button variant="primary">View History</Button></a></Link>
+            <Button variant="golf" onClick={() => navigate("/golf/practice")}>Log Another</Button>
+            <Button variant="primary" onClick={() => navigate("/golf/practice-history")}>View History</Button>
           </div>
         </div>
       </div>

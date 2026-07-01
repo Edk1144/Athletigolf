@@ -9,6 +9,7 @@ import Dashboard from "@/pages/Dashboard";
 import Profile from "@/pages/Profile";
 import Analytics from "@/pages/Analytics";
 import RoundHistory from "@/pages/RoundHistory";
+import ArchivedSplits from "@/pages/ArchivedSplits";
 import CreateSplit from "@/pages/CreateSplit";
 import SubmitSession from "@/pages/SubmitSession";
 import GymQuiz from "@/pages/GymQuiz";
@@ -114,6 +115,12 @@ function AppShell() {
         <Route path="/workouts">
           <ProtectedRoute>
             <CreateSplit />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/workouts/archive">
+          <ProtectedRoute>
+            <ArchivedSplits />
           </ProtectedRoute>
         </Route>
 

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "wouter";
+import { useLocation } from "wouter";
 import { ArrowUpRight, BarChart3, Brain, Dumbbell, Flag, Target } from "lucide-react";
 import { Button, EmptyState, SectionTitle, Surface } from "@/components/ui";
 import { supabase } from "@/lib/supabase";
@@ -24,6 +24,7 @@ import {
 import type { PracticeSession, Round, RoundHole, Workout } from "@/lib/types";
 
 export default function Analytics() {
+  const [, navigate] = useLocation();
   const [rounds, setRounds] = useState<Round[]>([]);
   const [roundHoles, setRoundHoles] = useState<RoundHole[]>([]);
   const [workouts, setWorkouts] = useState<Workout[]>([]);
@@ -120,8 +121,8 @@ export default function Analytics() {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Link href="/golf/submit"><a><Button variant="golf"><Flag className="h-4 w-4" />Round</Button></a></Link>
-            <Link href="/workouts/submit"><a><Button variant="pulse"><Dumbbell className="h-4 w-4" />Training</Button></a></Link>
+            <Button variant="golf" onClick={() => navigate("/golf/submit")}><Flag className="h-4 w-4" />Round</Button>
+            <Button variant="pulse" onClick={() => navigate("/workouts/submit")}><Dumbbell className="h-4 w-4" />Training</Button>
           </div>
         </div>
       </section>
@@ -191,7 +192,7 @@ export default function Analytics() {
               <EmptyState
                 title="No scores yet"
                 description="Submit a round to start building your scoring trend."
-                action={<Link href="/golf/submit"><a><Button variant="golf">Submit Round</Button></a></Link>}
+                action={<Button variant="golf" onClick={() => navigate("/golf/submit")}>Submit Round</Button>}
               />
             )}
           </Surface>
@@ -263,16 +264,20 @@ export default function Analytics() {
               </div>
             </div>
             <p className="mt-5 leading-relaxed text-white/70">{biggestOpportunity}</p>
-            <Link href="/golf/practice">
-              <a className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-pulse">
-                Log focused practice <ArrowUpRight className="h-4 w-4" />
-              </a>
-            </Link>
-            <Link href={recommendedPracticeHref}>
-              <a className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-golf">
-                Start recommended practice <ArrowUpRight className="h-4 w-4" />
-              </a>
-            </Link>
+            <button
+              type="button"
+              onClick={() => navigate("/golf/practice")}
+              className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-pulse"
+            >
+              Log focused practice <ArrowUpRight className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate(recommendedPracticeHref)}
+              className="mt-3 flex items-center gap-2 text-sm font-semibold text-golf"
+            >
+              Start recommended practice <ArrowUpRight className="h-4 w-4" />
+            </button>
           </Surface>
 
           <Surface>

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Activity, Dumbbell, Plus, Trash2 } from "lucide-react";
-import { Button, FieldLabel, PageHeader, StatusPill, Surface, TextInput } from "@/components/ui";
+import { Button, EmptyState, FieldLabel, PageHeader, StatusPill, Surface, TextInput } from "@/components/ui";
 import { findExercise, inferExerciseMuscle } from "@/lib/exerciseLibrary";
 import { supabase } from "@/lib/supabase";
 import type { SplitDay } from "@/lib/types";
@@ -13,26 +13,14 @@ type ExerciseLog = {
   notes: string;
 };
 
-const workoutTemplates: Record<string, string[]> = {
-  Push: ["Bench Press", "Incline DB Press", "Shoulder Press", "Tricep Pushdown"],
-  Pull: ["Lat Pulldown", "Rows", "Rear Delts", "Incline Curls"],
-  Legs: ["Squats", "Leg Press", "Leg Curls", "Calf Raises"],
-  Upper: ["Machine Press", "Pulldown", "Lateral Raises", "Arms"],
-  Lower: ["Leg Extension", "RDL", "Hamstring Curl", "Calves"],
-};
-
 type WorkoutOption = {
   id: string;
   name: string;
   exercises: string[];
 };
 
-const fallbackOptions: WorkoutOption[] = Object.entries(workoutTemplates).map(
-  ([name, exercises]) => ({ id: name, name, exercises })
-);
-
 export default function SubmitSession() {
-  const [workoutOptions, setWorkoutOptions] = useState<WorkoutOption[]>(fallbackOptions);
+  const [workoutOptions, setWorkoutOptions] = useState<WorkoutOption[]>([]);
   const [loadingSplit, setLoadingSplit] = useState(true);
   const [selectedDay, setSelectedDay] = useState("");
   const [exercises, setExercises] = useState<ExerciseLog[]>([]);
@@ -58,6 +46,8 @@ export default function SubmitSession() {
           }));
 
         if (savedOptions.length > 0) setWorkoutOptions(savedOptions);
+      } else {
+        setWorkoutOptions([]);
       }
 
       setLoadingSplit(false);
@@ -149,7 +139,7 @@ export default function SubmitSession() {
           </div>
 
           <div className="space-y-2">
-            {workoutOptions.map((workout) => (
+            {workoutOptions.length > 0 ? workoutOptions.map((workout) => (
               <button
                 key={workout.id}
                 onClick={() => selectDay(workout.name)}
@@ -169,7 +159,13 @@ export default function SubmitSession() {
                   exercises loaded
                 </p>
               </button>
-            ))}
+            )) : (
+              <EmptyState
+                title="No saved split yet"
+                description="Save a Training Board split first, then the planned days will appear here for fast workout logging."
+                action={<Button type="button" variant="pulse" onClick={() => window.location.href = "/workouts"}>Open Training Board</Button>}
+              />
+            )}
           </div>
         </Surface>
 

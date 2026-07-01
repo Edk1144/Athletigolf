@@ -1,11 +1,13 @@
 import { useState } from "react";
-import { Link } from "wouter";
+import { useLocation } from "wouter";
 import { Button } from "@/components/ui";
+import { supabase } from "@/lib/supabase";
 
 interface TrainingData {
   equipment: string;
   experience: string;
   frequency: string;
+  restDays: string[];
   sessionLength: string;
   goal: string;
   golfPriority: string;
@@ -20,14 +22,19 @@ type GeneratedDay = {
 };
 
 const generatedSplitStorageKey = "athletigolf.generatedSplitDraft";
+const generatedSplitSourceKey = "athletigolf.generatedSplitSource";
+const weekDays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
-const steps: Array<{
+type QuizStep = {
   key: keyof TrainingData;
   eyebrow: string;
   title: string;
   detail: string;
   options: string[];
-}> = [
+  multi?: boolean;
+};
+
+const steps: QuizStep[] = [
   {
     key: "equipment",
     eyebrow: "Training Setup",
@@ -48,6 +55,14 @@ const steps: Array<{
     title: "How many sessions can you realistically hit?",
     detail: "The best split is the one that fits your actual week, not a perfect week that never happens.",
     options: ["2 days", "3 days", "4 days", "5 days"],
+  },
+  {
+    key: "restDays",
+    eyebrow: "Rest Days",
+    title: "Are there any days you need to keep free?",
+    detail: "Pick any days that should stay as rest days. The split will work around these where possible.",
+    options: weekDays,
+    multi: true,
   },
   {
     key: "sessionLength",
@@ -87,11 +102,15 @@ const steps: Array<{
 ];
 
 export default function GymQuiz({ onComplete }: { onComplete: () => void }) {
+  const [, navigate] = useLocation();
   const [step, setStep] = useState(0);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
   const [data, setData] = useState<TrainingData>({
     equipment: "",
     experience: "",
     frequency: "",
+    restDays: [],
     sessionLength: "",
     goal: "",
     golfPriority: "",
@@ -106,16 +125,64 @@ export default function GymQuiz({ onComplete }: { onComplete: () => void }) {
     typeof window !== "undefined" && new URLSearchParams(window.location.search).get("return") === "workouts";
 
   const choose = (value: string) => {
+    if (current.multi) return;
     setData((prev) => ({ ...prev, [current.key]: value }));
     setStep((prev) => prev + 1);
   };
 
-  const useGeneratedSplit = () => {
-    if (returnToWorkouts) {
-      window.sessionStorage.setItem(generatedSplitStorageKey, JSON.stringify(plan.days));
-      window.location.href = "/workouts";
+  const toggleRestDay = (day: string) => {
+    setData((prev) => {
+      const selected = prev.restDays.includes(day);
+      return {
+        ...prev,
+        restDays: selected ? prev.restDays.filter((restDay) => restDay !== day) : [...prev.restDays, day],
+      };
+    });
+  };
+
+  const continueFromMultiStep = () => {
+    setStep((prev) => prev + 1);
+  };
+
+  const saveGeneratedSplit = async () => {
+    setSaving(true);
+    setSaveError("");
+
+    const archivedAt = new Date().toISOString();
+    const archiveResult = await supabase
+      .from("split_days")
+      .update({ archived_at: archivedAt })
+      .is("archived_at", null);
+
+    if (archiveResult.error) {
+      setSaveError(archiveResult.error.message);
+      setSaving(false);
       return;
     }
+
+    const rows = plan.days.map((day) => ({
+      day_name: day.day,
+      split_name: day.focus,
+      exercises: day.exercises,
+      archived_at: null,
+    }));
+
+    const { error } = await supabase.from("split_days").insert(rows);
+    setSaving(false);
+
+    if (error) {
+      setSaveError(error.message);
+      return;
+    }
+
+    window.localStorage.removeItem(generatedSplitStorageKey);
+    window.localStorage.removeItem(generatedSplitSourceKey);
+
+    if (returnToWorkouts) {
+      navigate("/workouts");
+      return;
+    }
+
     onComplete();
   };
 
@@ -131,7 +198,7 @@ export default function GymQuiz({ onComplete }: { onComplete: () => void }) {
               Build a training board that fits golf
             </h1>
             <p className="mt-2 max-w-2xl text-sm text-muted">
-              Answer a few practical questions, preview the generated week, then save it as your active split.
+              Answer a few practical questions, preview the generated week, then save it as your active Training Board.
             </p>
           </div>
           <div className="rounded-full border border-line px-3 py-1 text-sm font-semibold text-muted">
@@ -150,17 +217,45 @@ export default function GymQuiz({ onComplete }: { onComplete: () => void }) {
             </div>
 
             <div className="space-y-3">
-              {current.options.map((option) => (
-                <button
-                  key={option}
-                  type="button"
-                  onClick={() => choose(option)}
-                  className="flex w-full items-center justify-between rounded-xl border border-line bg-white/70 p-4 text-left font-semibold text-dark transition hover:border-pulse hover:bg-pulse/10"
-                >
-                  {option}
-                  <span className="text-sm text-muted">Select</span>
-                </button>
-              ))}
+              {current.multi ? (
+                <>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {current.options.map((option) => {
+                      const selected = data.restDays.includes(option);
+                      return (
+                        <button
+                          key={option}
+                          type="button"
+                          onClick={() => toggleRestDay(option)}
+                          className={`flex w-full items-center justify-between rounded-xl border p-4 text-left font-semibold transition ${
+                            selected
+                              ? "border-pulse bg-pulse/15 text-dark"
+                              : "border-line bg-white/70 text-dark hover:border-pulse hover:bg-pulse/10"
+                          }`}
+                        >
+                          {option}
+                          <span className="text-sm text-muted">{selected ? "Rest" : "Available"}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <Button type="button" variant="primary" onClick={continueFromMultiStep}>
+                    Continue
+                  </Button>
+                </>
+              ) : (
+                current.options.map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => choose(option)}
+                    className="flex w-full items-center justify-between rounded-xl border border-line bg-white/70 p-4 text-left font-semibold text-dark transition hover:border-pulse hover:bg-pulse/10"
+                  >
+                    {option}
+                    <span className="text-sm text-muted">Select</span>
+                  </button>
+                ))
+              )}
             </div>
           </div>
         ) : (
@@ -170,7 +265,7 @@ export default function GymQuiz({ onComplete }: { onComplete: () => void }) {
                 Generated Training Board
               </p>
               <h2 className="mt-2 text-3xl font-semibold text-dark">{plan.title}</h2>
-              <p className="mt-3 text-muted">{plan.summary}</p>
+              <p className="mt-3 text-muted">{plan.summary} Save it to make it your active split for Training Console.</p>
             </div>
 
             <div className="mt-5 grid gap-3 md:grid-cols-3">
@@ -199,20 +294,22 @@ export default function GymQuiz({ onComplete }: { onComplete: () => void }) {
               ))}
             </div>
 
+            {saveError && (
+              <div className="mt-5 rounded-lg border border-danger/25 bg-danger/10 p-4 text-sm font-semibold text-danger">
+                {saveError}
+              </div>
+            )}
+
             <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-              <Button type="button" variant="primary" onClick={useGeneratedSplit}>
-                Edit This Split
+              <Button type="button" variant="primary" onClick={saveGeneratedSplit} disabled={saving}>
+                {saving ? "Saving Split..." : "Save Split"}
               </Button>
-              <Button type="button" variant="secondary" onClick={() => setStep(0)}>
+              <Button type="button" variant="secondary" onClick={() => setStep(0)} disabled={saving}>
                 Retake Quiz
               </Button>
-              <Link href="/workouts">
-                <a>
-                  <Button type="button" variant="ghost">
-                    Back to Board
-                  </Button>
-                </a>
-              </Link>
+              <Button type="button" variant="ghost" onClick={() => navigate("/workouts")} disabled={saving}>
+                Back to Board
+              </Button>
             </div>
           </div>
         )}
@@ -235,6 +332,13 @@ function buildTrainingPlan(data: TrainingData) {
         detail: `${data.experience || "Your level"} training age with enough recovery around golf practice and rounds.`,
       },
       {
+        label: "Protected Rest",
+        title: data.restDays.length ? data.restDays.join(", ") : "Flexible",
+        detail: data.restDays.length
+          ? "The generated week avoids these days where the session count allows it."
+          : "No fixed rest days selected, so the split uses the strongest training rhythm.",
+      },
+      {
         label: "Golf Transfer",
         title: data.golfPriority || "Athletic carryover",
         detail: getGolfTransferNote(data.golfPriority),
@@ -252,38 +356,37 @@ function buildTrainingPlan(data: TrainingData) {
 function buildSplitDays(data: TrainingData): GeneratedDay[] {
   const frequency = data.frequency || "3 days";
   const exerciseCount = data.sessionLength === "30 minutes" ? 4 : data.sessionLength === "45 minutes" ? 5 : 6;
+  let trainingDays: GeneratedDay[];
 
   if (frequency === "2 days") {
-    return fillWeek([
+    trainingDays = [
       trainingDay("Monday", "Full Body Power", pickExercises(data, ["Lower", "Push", "Pull", "Core"], exerciseCount)),
       trainingDay("Thursday", "Full Body Strength", pickExercises(data, ["Hinge", "Push", "Pull", "Rotation"], exerciseCount)),
-    ]);
-  }
-
-  if (frequency === "4 days") {
-    return fillWeek([
+    ];
+  } else if (frequency === "4 days") {
+    trainingDays = [
       trainingDay("Monday", "Upper Strength", pickExercises(data, ["Push", "Pull", "Shoulder", "Core"], exerciseCount)),
       trainingDay("Tuesday", "Lower Strength", pickExercises(data, ["Lower", "Hinge", "Single Leg", "Mobility"], exerciseCount)),
       trainingDay("Thursday", "Upper Speed", pickExercises(data, ["Power", "Push", "Pull", "Rotation"], exerciseCount)),
       trainingDay("Saturday", "Lower Athletic", pickExercises(data, ["Power", "Lower", "Hinge", "Core"], exerciseCount)),
-    ]);
-  }
-
-  if (frequency === "5 days") {
-    return fillWeek([
+    ];
+  } else if (frequency === "5 days") {
+    trainingDays = [
       trainingDay("Monday", "Push Strength", pickExercises(data, ["Push", "Shoulder", "Core"], exerciseCount)),
       trainingDay("Tuesday", "Lower Strength", pickExercises(data, ["Lower", "Hinge", "Single Leg"], exerciseCount)),
       trainingDay("Wednesday", "Pull Strength", pickExercises(data, ["Pull", "Shoulder", "Core"], exerciseCount)),
       trainingDay("Friday", "Power + Rotation", pickExercises(data, ["Power", "Rotation", "Core", "Mobility"], exerciseCount)),
       trainingDay("Saturday", "Golf Conditioning", pickExercises(data, ["Carry", "Single Leg", "Mobility", "Core"], exerciseCount)),
-    ]);
+    ];
+  } else {
+    trainingDays = [
+      trainingDay("Monday", "Strength Base", pickExercises(data, ["Lower", "Push", "Pull"], exerciseCount)),
+      trainingDay("Wednesday", "Athletic Upper", pickExercises(data, ["Push", "Pull", "Rotation", "Core"], exerciseCount)),
+      trainingDay("Friday", "Lower + Power", pickExercises(data, ["Power", "Hinge", "Single Leg", "Mobility"], exerciseCount)),
+    ];
   }
 
-  return fillWeek([
-    trainingDay("Monday", "Strength Base", pickExercises(data, ["Lower", "Push", "Pull"], exerciseCount)),
-    trainingDay("Wednesday", "Athletic Upper", pickExercises(data, ["Push", "Pull", "Rotation", "Core"], exerciseCount)),
-    trainingDay("Friday", "Lower + Power", pickExercises(data, ["Power", "Hinge", "Single Leg", "Mobility"], exerciseCount)),
-  ]);
+  return fillWeek(applyProtectedRestDays(trainingDays, data.restDays));
 }
 
 function trainingDay(day: string, focus: string, exercises: string[]): GeneratedDay {
@@ -292,9 +395,28 @@ function trainingDay(day: string, focus: string, exercises: string[]): Generated
 
 function fillWeek(trainingDays: GeneratedDay[]): GeneratedDay[] {
   const byDay = new Map(trainingDays.map((day) => [day.day, day]));
-  return ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map(
+  return weekDays.map(
     (day) => byDay.get(day) || { day, focus: "Rest", exercises: ["Mobility", "Walk", "Recovery"] }
   );
+}
+
+function applyProtectedRestDays(trainingDays: GeneratedDay[], restDays: string[]): GeneratedDay[] {
+  if (restDays.length === 0) return trainingDays;
+
+  const protectedDays = new Set(restDays);
+  const usedDays = new Set(trainingDays.map((day) => day.day));
+  const availableDays = weekDays.filter((day) => !protectedDays.has(day));
+
+  return trainingDays.map((trainingDay) => {
+    if (!protectedDays.has(trainingDay.day)) return trainingDay;
+
+    const replacementDay = availableDays.find((day) => !usedDays.has(day));
+    if (!replacementDay) return trainingDay;
+
+    usedDays.delete(trainingDay.day);
+    usedDays.add(replacementDay);
+    return { ...trainingDay, day: replacementDay };
+  });
 }
 
 function pickExercises(data: TrainingData, blocks: string[], count: number) {
