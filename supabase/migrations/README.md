@@ -2,6 +2,10 @@
 
 This folder contains the historical Supabase migrations for AthletiGolf.
 
+For the current required database shape, read:
+
+- `supabase/migrations/CURRENT_SCHEMA.md`
+
 Some migrations have duplicate-looking names and `.sql.sql` suffixes. Keep those
 files in place because they may already be part of deployed database history.
 Removing or renaming applied migrations can make local and remote Supabase
@@ -23,7 +27,8 @@ calculated from actual hole-by-hole data instead of a standard assumption.
 
 ## Current Bolt/Supabase Checklist
 
-If Bolt asks what database changes it needs, check that these capabilities exist:
+If Bolt asks what database changes it needs, use `CURRENT_SCHEMA.md` as the
+source of truth. The short checklist is:
 
 - `rounds` has distance fields: `average_driving_distance`, `longest_drive`, and
   `tee_shot_quality`.
@@ -36,3 +41,12 @@ The duplicate-looking repair migrations for practice drills and split archiving
 are intentionally additive and use `IF NOT EXISTS`, so applying either copy
 should be harmless. Do not paste both copies into Bolt manually if the columns
 already exist.
+
+Suggested Bolt message:
+
+> Do not recreate the database or delete old migrations. Check the current
+> Supabase database has the columns listed in
+> `supabase/migrations/CURRENT_SCHEMA.md`. If anything is missing, create one
+> new additive migration using `ADD COLUMN IF NOT EXISTS`, `CREATE TABLE IF NOT
+> EXISTS`, and guarded policies/indexes. Do not paste duplicate historical
+> `.sql.sql` migrations if the columns already exist.
