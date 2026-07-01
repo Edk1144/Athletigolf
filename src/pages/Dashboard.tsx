@@ -5,6 +5,7 @@ import {
   ArrowUpRight,
   Brain,
   CalendarDays,
+  Droplets,
   Dumbbell,
   Flag,
   NotebookPen,
@@ -36,6 +37,7 @@ import {
   type RelationshipInsight,
 } from "@/lib/insights";
 import type { Competition, ExerciseLog, OnboardingData, PracticeSession, Round, RoundHole, Workout } from "@/lib/types";
+import type { WellnessLog } from "@/lib/types";
 
 export default function Dashboard() {
   const [, navigate] = useLocation();
@@ -45,6 +47,7 @@ export default function Dashboard() {
   const [workouts, setWorkouts] = useState<Workout[]>([]);
   const [practices, setPractices] = useState<PracticeSession[]>([]);
   const [competitions, setCompetitions] = useState<Competition[]>([]);
+  const [wellnessLogs, setWellnessLogs] = useState<WellnessLog[]>([]);
   const [sportMode, setSportMode] = useState<OnboardingData["mainSport"]>("both");
   const [loading, setLoading] = useState(true);
 
@@ -55,12 +58,13 @@ export default function Dashboard() {
 
   useEffect(() => {
     const load = async () => {
-      const [{ data: r }, { data: h }, { data: w }, { data: p }, { data: c }, { data: profile }] = await Promise.all([
+      const [{ data: r }, { data: h }, { data: w }, { data: p }, { data: c }, { data: wellness }, { data: profile }] = await Promise.all([
         supabase.from("rounds").select("*").order("created_at", { ascending: false }),
         supabase.from("round_holes").select("*").order("created_at", { ascending: false }),
         supabase.from("workouts").select("*").order("created_at", { ascending: false }),
         supabase.from("practice_sessions").select("*").order("created_at", { ascending: false }),
         supabase.from("competitions").select("*").eq("status", "upcoming").order("competition_date", { ascending: true }),
+        supabase.from("daily_wellness_logs").select("*").order("log_date", { ascending: false }).limit(7),
         supabase.from("profiles").select("onboarding_data").maybeSingle(),
       ]);
       setRounds((r as Round[]) || []);
@@ -68,6 +72,7 @@ export default function Dashboard() {
       setWorkouts((w as Workout[]) || []);
       setPractices((p as PracticeSession[]) || []);
       setCompetitions((c as Competition[]) || []);
+      setWellnessLogs((wellness as WellnessLog[]) || []);
       setSportMode(((profile?.onboarding_data as OnboardingData | null)?.mainSport) || "both");
       setLoading(false);
     };
@@ -82,6 +87,8 @@ export default function Dashboard() {
   const latestWorkout = workouts[0] ?? null;
   const lastRound = rounds[0] ?? null;
   const nextCompetition = competitions[0] ?? null;
+  const todayWellness = wellnessLogs.find((log) => log.log_date === new Date().toISOString().slice(0, 10)) || wellnessLogs[0] || null;
+  const hydrationProgress = todayWellness?.water_litres ? Math.min((todayWellness.water_litres / 2.5) * 100, 100) : 0;
   const trainingOnly = sportMode === "training";
   const golfStats = getGolfStats(rounds);
   const shortGameStats = getShortGameStats(roundHoles);
@@ -152,9 +159,22 @@ export default function Dashboard() {
 
         <Surface className="bg-panel/95">
           <SectionTitle eyebrow="Today" title={now.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })} />
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid gap-3 md:grid-cols-3">
             <SummaryTile label="Last Round" value={lastRound ? `${lastRound.score ?? "-"}${lastRound.course ? ` / ${lastRound.course}` : ""}` : "No round"} tone="golf" />
             <SummaryTile label="Last Training" value={latestWorkout?.workout_name || "No session"} tone="lab" />
+            <button
+              type="button"
+              onClick={() => navigate("/wellness")}
+              className="min-h-[116px] rounded-xl border border-pulse/20 bg-pulse/8 p-4 text-left transition hover:border-pulse/40"
+            >
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-muted">Wellness</p>
+              <p className="mt-3 text-lg font-semibold leading-snug text-dark">
+                {todayWellness ? `${todayWellness.water_litres ?? "-"} L water` : "No log"}
+              </p>
+              <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-steel/10">
+                <div className="h-full rounded-full bg-pulse" style={{ width: `${hydrationProgress}%` }} />
+              </div>
+            </button>
           </div>
           <div className="mt-3 rounded-xl border border-pulse/20 bg-pulse/8 p-4">
             <div className="flex items-start gap-3">
@@ -381,6 +401,7 @@ export default function Dashboard() {
             <Action href="/golf/submit" icon={Flag} title="Round" text="Scorecard entry" tone="golf" />
             <Action href="/workouts/submit" icon={Dumbbell} title="Training" text="Performance console" tone="pulse" />
             <Action href="/workouts" icon={PlusCircle} title="Board" text="Plan the week" tone="lab" />
+            <Action href="/wellness" icon={Droplets} title="Wellness" text="Hydration and recovery" tone="pulse" />
             <Action href="/analytics" icon={ArrowUpRight} title="Report" text="Review trends" tone="dark" />
           </div>
         </Surface>

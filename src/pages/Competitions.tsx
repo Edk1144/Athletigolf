@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { CalendarDays, CheckCircle2, Plus, Trophy } from "lucide-react";
+import { CalendarDays, CheckCircle2, Edit3, Plus, Trophy, X } from "lucide-react";
 import { Button, EmptyState, FieldLabel, PageHeader, SelectInput, Surface, TextArea, TextInput } from "@/components/ui";
 import { supabase } from "@/lib/supabase";
 import type { Competition } from "@/lib/types";
@@ -21,6 +21,8 @@ export default function Competitions() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [form, setForm] = useState(blankForm);
+  const [editingCompetition, setEditingCompetition] = useState<Competition | null>(null);
+  const [editForm, setEditForm] = useState(blankForm);
 
   useEffect(() => {
     loadCompetitions();
@@ -72,10 +74,61 @@ export default function Competitions() {
 
     if (updateError) {
       setError(updateError.message);
-      return;
+      return false;
     }
 
     await loadCompetitions();
+    return true;
+  }
+
+  function openEditor(competition: Competition) {
+    setError("");
+    setEditingCompetition(competition);
+    setEditForm({
+      name: competition.name || "",
+      course: competition.course || "",
+      competition_date: competition.competition_date || "",
+      start_time: competition.start_time || "",
+      priority: competition.priority || "medium",
+      target_score: competition.target_score?.toString() || "",
+      focus_area: competition.focus_area || "",
+      notes: competition.notes || "",
+    });
+  }
+
+  async function saveEditedCompetition(event: React.FormEvent) {
+    event.preventDefault();
+    if (!editingCompetition) return;
+
+    setSaving(true);
+    setError("");
+
+    const saved = await updateCompetition(editingCompetition.id, {
+      name: editForm.name.trim(),
+      course: editForm.course.trim() || null,
+      competition_date: editForm.competition_date,
+      start_time: editForm.start_time || null,
+      priority: editForm.priority as Competition["priority"],
+      target_score: editForm.target_score ? Number(editForm.target_score) : null,
+      focus_area: editForm.focus_area || null,
+      notes: editForm.notes.trim() || null,
+    });
+
+    setSaving(false);
+    if (saved) setEditingCompetition(null);
+  }
+
+  async function withdrawCompetition() {
+    if (!editingCompetition) return;
+
+    const confirmed = window.confirm(`Withdraw from ${editingCompetition.name}? It will be moved out of upcoming competitions.`);
+    if (!confirmed) return;
+
+    setSaving(true);
+    setError("");
+    const saved = await updateCompetition(editingCompetition.id, { status: "cancelled" });
+    setSaving(false);
+    if (saved) setEditingCompetition(null);
   }
 
   const upcoming = useMemo(
@@ -200,6 +253,7 @@ export default function Competitions() {
                       result_score: score,
                     })
                   }
+                  onEdit={() => openEditor(competition)}
                 />
               ))}
             </div>
@@ -224,14 +278,96 @@ export default function Competitions() {
           )}
         </Surface>
       </section>
+
+      {editingCompetition && (
+        <div className="fixed inset-0 z-50 flex justify-end">
+          <button
+            type="button"
+            onClick={() => setEditingCompetition(null)}
+            className="absolute inset-0 bg-black/50"
+            aria-label="Close competition editor"
+          />
+          <aside className="relative z-10 h-full w-full max-w-xl overflow-y-auto border-l border-line bg-panel p-6 shadow-2xl">
+            <div className="mb-6 flex items-start justify-between gap-4 border-b border-line pb-5">
+              <div>
+                <p className="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-golf">Edit Competition</p>
+                <h2 className="text-3xl font-semibold tracking-tight text-dark">{editingCompetition.name}</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingCompetition(null)}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-muted transition hover:bg-steel/10 hover:text-dark"
+                aria-label="Close competition editor"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={saveEditedCompetition} className="grid gap-4">
+              <Field label="Competition name" value={editForm.name} onChange={(value) => setEditForm((prev) => ({ ...prev, name: value }))} required />
+              <Field label="Course" value={editForm.course} onChange={(value) => setEditForm((prev) => ({ ...prev, course: value }))} />
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Date" type="date" value={editForm.competition_date} onChange={(value) => setEditForm((prev) => ({ ...prev, competition_date: value }))} required />
+                <Field label="Start time" type="time" value={editForm.start_time} onChange={(value) => setEditForm((prev) => ({ ...prev, start_time: value }))} />
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <FieldLabel>Priority</FieldLabel>
+                  <SelectInput value={editForm.priority} onChange={(event) => setEditForm((prev) => ({ ...prev, priority: event.target.value }))}>
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                  </SelectInput>
+                </div>
+                <Field label="Target score" type="number" value={editForm.target_score} onChange={(value) => setEditForm((prev) => ({ ...prev, target_score: value }))} />
+              </div>
+              <div>
+                <FieldLabel>Prep focus</FieldLabel>
+                <SelectInput value={editForm.focus_area} onChange={(event) => setEditForm((prev) => ({ ...prev, focus_area: event.target.value }))}>
+                  <option value="">Let AthletiGolf suggest</option>
+                  <option>Driving accuracy</option>
+                  <option>Approach play</option>
+                  <option>Short game</option>
+                  <option>Putting</option>
+                  <option>Course strategy</option>
+                </SelectInput>
+              </div>
+              <div>
+                <FieldLabel>Notes</FieldLabel>
+                <TextArea rows={4} value={editForm.notes} onChange={(event) => setEditForm((prev) => ({ ...prev, notes: event.target.value }))} />
+              </div>
+
+              <div className="mt-4 grid gap-3 border-t border-line pt-5 sm:grid-cols-[1fr_auto_auto]">
+                <Button type="button" variant="danger" onClick={withdrawCompetition} disabled={saving}>
+                  Withdraw
+                </Button>
+                <Button type="button" variant="secondary" onClick={() => setEditingCompetition(null)} disabled={saving}>
+                  Cancel
+                </Button>
+                <Button type="submit" variant="golf" disabled={saving || !editForm.name || !editForm.competition_date}>
+                  {saving ? "Saving..." : "Save Changes"}
+                </Button>
+              </div>
+            </form>
+          </aside>
+        </div>
+      )}
     </main>
   );
 }
 
-function CompetitionRow({ competition, onComplete }: { competition: Competition; onComplete: (score: number | null) => void }) {
+function CompetitionRow({
+  competition,
+  onComplete,
+  onEdit,
+}: {
+  competition: Competition;
+  onComplete: (score: number | null) => void;
+  onEdit: () => void;
+}) {
   const [score, setScore] = useState("");
   return (
-    <div className="grid gap-3 p-4 lg:grid-cols-[1fr_120px_120px_190px] lg:items-center">
+    <div className="grid gap-3 p-4 lg:grid-cols-[1fr_120px_120px_260px] lg:items-center">
       <div>
         <h3 className="font-semibold text-dark">{competition.name}</h3>
         <p className="mt-1 text-sm text-muted">
@@ -239,11 +375,15 @@ function CompetitionRow({ competition, onComplete }: { competition: Competition;
         </p>
       </div>
       <p className="text-sm font-semibold text-muted">{formatDate(competition.competition_date)}</p>
-      <p className="rounded-full bg-golf/10 px-3 py-1 text-center text-sm font-semibold text-golf">
+      <p className={`rounded-full px-3 py-1 text-center text-sm font-semibold ${getPriorityClass(competition.priority)}`}>
         {competition.priority}
       </p>
       <div className="flex gap-2">
         <TextInput type="number" value={score} onChange={(event) => setScore(event.target.value)} placeholder="Score" />
+        <Button type="button" variant="secondary" onClick={onEdit}>
+          <Edit3 className="h-4 w-4" />
+          Edit
+        </Button>
         <Button type="button" variant="secondary" onClick={() => onComplete(score ? Number(score) : null)}>
           Done
         </Button>
@@ -311,6 +451,12 @@ function DarkMetric({ label, value }: { label: string; value: React.ReactNode })
 function getPrepLine(competition: Competition) {
   const focus = competition.focus_area || "your weakest current scoring area";
   return `${getDaysUntil(competition.competition_date)}. Prep should bias ${focus.toLowerCase()} and keep the week simple.`;
+}
+
+function getPriorityClass(priority: Competition["priority"]) {
+  if (priority === "high") return "bg-danger/10 text-danger";
+  if (priority === "medium") return "bg-gold/15 text-gold";
+  return "bg-golf/10 text-golf";
 }
 
 function getDaysUntil(value: string) {

@@ -222,6 +222,37 @@ Security:
 - Row Level Security enabled.
 - Users can only access rows where `auth.uid() = user_id`.
 
+### `daily_wellness_logs`
+
+Purpose: daily manual nutrition, hydration, recovery, and bodyweight signals.
+
+Required columns:
+
+- `id uuid primary key`
+- `user_id uuid default auth.uid()`
+- `log_date date`
+- `water_litres numeric`
+- `calories integer`
+- `protein_grams integer`
+- `carbs_grams integer`
+- `fats_grams integer`
+- `bodyweight numeric`
+- `sleep_hours numeric`
+- `energy_rating integer`
+- `notes text`
+- `created_at timestamptz`
+- `updated_at timestamptz`
+
+Recommended constraints/indexes:
+
+- Unique pair: `(user_id, log_date)`
+- Index on `(user_id, log_date)`
+
+Security:
+
+- Row Level Security enabled.
+- Users can only access rows where `auth.uid() = user_id`.
+
 ## Bolt Answer
 
 If Bolt asks what database work it needs, say:

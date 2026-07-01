@@ -6,6 +6,7 @@ import {
   CalendarDays,
   ChevronDown,
   CreditCard,
+  Droplets,
   Dumbbell,
   Flag,
   History,
@@ -26,12 +27,13 @@ type NavItem = {
   href: string;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
-  tone?: "golf" | "gym" | "gold";
+  tone?: "golf" | "gym" | "gold" | "pulse";
 };
 
 const mainLinks: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/analytics", label: "Analytics", icon: BarChart3, tone: "gold" },
+  { href: "/wellness", label: "Wellness", icon: Droplets, tone: "pulse" },
   { href: "/profile", label: "Profile", icon: User },
   { href: "/memberships", label: "Memberships", icon: CreditCard },
 ];
@@ -60,6 +62,7 @@ const supportLinks: NavItem[] = [
 const titles: Record<string, { title: string; section: string }> = {
   "/dashboard": { title: "Command Center", section: "Today" },
   "/analytics": { title: "Performance Report", section: "Analysis" },
+  "/wellness": { title: "Wellness", section: "Recovery" },
   "/profile": { title: "Athlete Profile", section: "Account" },
   "/memberships": { title: "Memberships", section: "Billing" },
   "/workouts": { title: "Training Board", section: "Performance Lab" },
@@ -253,6 +256,8 @@ function MenuLink({
       ? "text-emerald-200"
       : item.tone === "gym"
       ? "text-sky-200"
+      : item.tone === "pulse"
+      ? "text-cyan-200"
       : item.tone === "gold"
       ? "text-gold"
       : "text-white/75";

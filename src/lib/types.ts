@@ -167,3 +167,20 @@ export type Competition = {
   created_at: string;
   updated_at?: string | null;
 };
+
+export type WellnessLog = {
+  id: string;
+  user_id: string;
+  log_date: string;
+  water_litres: number | null;
+  calories: number | null;
+  protein_grams: number | null;
+  carbs_grams: number | null;
+  fats_grams: number | null;
+  bodyweight: number | null;
+  sleep_hours: number | null;
+  energy_rating: number | null;
+  notes: string | null;
+  created_at: string;
+  updated_at?: string | null;
+};
