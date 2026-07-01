@@ -9,6 +9,7 @@ import Dashboard from "@/pages/Dashboard";
 import Onboarding from "@/pages/Onboarding";
 import Profile from "@/pages/Profile";
 import Analytics from "@/pages/Analytics";
+import AthletiAI from "@/pages/AthletiAI";
 import Wellness from "@/pages/Wellness";
 import Social from "@/pages/Social";
 import RoundHistory from "@/pages/RoundHistory";
@@ -130,6 +131,12 @@ function AppShell() {
         <Route path="/analytics">
           <ProtectedRoute>
             <Analytics />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/athletiai">
+          <ProtectedRoute>
+            <AthletiAI />
           </ProtectedRoute>
         </Route>
 

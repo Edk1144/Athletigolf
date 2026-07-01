@@ -3,7 +3,6 @@ import { useLocation } from "wouter";
 import {
   Activity,
   ArrowUpRight,
-  Brain,
   CalendarDays,
   Droplets,
   Dumbbell,
@@ -26,18 +25,8 @@ import {
   getShortGameStats,
   lowerIsBetterControl,
 } from "@/lib/golfStats";
-import {
-  getCoachNotes,
-  getDataHealthChecklist,
-  getExerciseAlternatives,
-  getPerformanceInsights,
-  getRecommendedPracticePlan,
-  getRelationshipInsights,
-  getTrainingIntelligence,
-  type PerformanceInsight,
-  type RelationshipInsight,
-} from "@/lib/insights";
-import type { Competition, ExerciseLog, OnboardingData, PracticeSession, Round, RoundHole, Workout } from "@/lib/types";
+import { getTrainingIntelligence } from "@/lib/insights";
+import type { Competition, ExerciseLog, OnboardingData, Round, RoundHole, Workout } from "@/lib/types";
 import type { WellnessLog } from "@/lib/types";
 import type { LiveActivity } from "@/lib/types";
 import { defaultWellnessTargets, getWellnessTargets, type WellnessTargets } from "@/lib/wellnessTargets";
@@ -48,7 +37,6 @@ export default function Dashboard() {
   const [rounds, setRounds] = useState<Round[]>([]);
   const [roundHoles, setRoundHoles] = useState<RoundHole[]>([]);
   const [workouts, setWorkouts] = useState<Workout[]>([]);
-  const [practices, setPractices] = useState<PracticeSession[]>([]);
   const [competitions, setCompetitions] = useState<Competition[]>([]);
   const [wellnessLogs, setWellnessLogs] = useState<WellnessLog[]>([]);
   const [liveActivities, setLiveActivities] = useState<LiveActivity[]>([]);
@@ -63,11 +51,10 @@ export default function Dashboard() {
 
   useEffect(() => {
     const load = async () => {
-      const [{ data: r }, { data: h }, { data: w }, { data: p }, { data: c }, { data: wellness }, { data: live }, { data: profile }] = await Promise.all([
+      const [{ data: r }, { data: h }, { data: w }, { data: c }, { data: wellness }, { data: live }, { data: profile }] = await Promise.all([
         supabase.from("rounds").select("*").order("created_at", { ascending: false }),
         supabase.from("round_holes").select("*").order("created_at", { ascending: false }),
         supabase.from("workouts").select("*").order("created_at", { ascending: false }),
-        supabase.from("practice_sessions").select("*").order("created_at", { ascending: false }),
         supabase.from("competitions").select("*").eq("status", "upcoming").order("competition_date", { ascending: true }),
         supabase.from("daily_wellness_logs").select("*").order("log_date", { ascending: false }).limit(7),
         supabase.from("live_activities").select("*").is("ended_at", null).order("started_at", { ascending: false }).limit(1),
@@ -76,7 +63,6 @@ export default function Dashboard() {
       setRounds((r as Round[]) || []);
       setRoundHoles((h as RoundHole[]) || []);
       setWorkouts((w as Workout[]) || []);
-      setPractices((p as PracticeSession[]) || []);
       setCompetitions((c as Competition[]) || []);
       setWellnessLogs((wellness as WellnessLog[]) || []);
       setLiveActivities((live as LiveActivity[]) || []);
@@ -96,6 +82,7 @@ export default function Dashboard() {
   const latestWorkout = workouts[0] ?? null;
   const lastRound = rounds[0] ?? null;
   const nextCompetition = competitions[0] ?? null;
+  const competitionToday = nextCompetition ? isToday(nextCompetition.competition_date) : false;
   const todayWellness = wellnessLogs.find((log) => log.log_date === new Date().toISOString().slice(0, 10)) || wellnessLogs[0] || null;
   const hydrationProgress = todayWellness?.water_litres ? Math.min((todayWellness.water_litres / wellnessTargets.waterLitres) * 100, 100) : 0;
   const liveActivity = liveActivities[0] || null;
@@ -110,14 +97,7 @@ export default function Dashboard() {
   const penaltyControl = lowerIsBetterControl(golfStats.avgPenaltyShots, 0, 4);
   const puttingControl = lowerIsBetterControl(golfStats.avgPutts, 30, 42);
   const highlight = getWeeklyHighlight(rounds, roundHoles, workouts, weekAgo);
-  const performanceInsights = getPerformanceInsights(rounds, roundHoles, workouts, practices);
-  const relationshipInsights = getRelationshipInsights(rounds, workouts);
   const trainingIntel = getTrainingIntelligence(workouts);
-  const coachNotes = getCoachNotes(rounds, roundHoles, workouts, practices);
-  const practicePlan = getRecommendedPracticePlan(rounds, roundHoles);
-  const dataHealth = getDataHealthChecklist(rounds, workouts, practices);
-  const alternatives = getExerciseAlternatives(trainingIntel.stalledLift?.name || trainingIntel.recentPr?.name);
-  const recommendedPracticeHref = `/golf/practice?type=${encodeURIComponent(practicePlan.practiceType)}&focus=${encodeURIComponent(practicePlan.focusArea)}&drills=${encodeURIComponent(practicePlan.drills.join("|"))}`;
 
   const activity = [
     ...rounds.slice(0, 3).map((round) => ({
@@ -218,24 +198,54 @@ export default function Dashboard() {
             <button
               type="button"
               onClick={() => navigate("/golf/competitions")}
-              className="mt-3 flex w-full items-start gap-3 rounded-xl border border-golf/20 bg-golf/8 p-4 text-left transition hover:border-golf/40"
+              className={`mt-3 flex w-full items-start gap-3 rounded-xl border p-4 text-left transition ${
+                competitionToday
+                  ? "border-gold/35 bg-gold/12 hover:border-gold/50"
+                  : "border-golf/20 bg-golf/8 hover:border-golf/40"
+              }`}
             >
-              <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-golf/15 text-golf">
+              <span className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${competitionToday ? "bg-gold/20 text-gold" : "bg-golf/15 text-golf"}`}>
                 <CalendarDays className="h-5 w-5" />
               </span>
               <span>
-                <span className="block text-xs font-bold uppercase tracking-[0.16em] text-golf">Upcoming competition</span>
+                <span className={`block text-xs font-bold uppercase tracking-[0.16em] ${competitionToday ? "text-gold" : "text-golf"}`}>
+                  {competitionToday ? "Competition day" : "Upcoming competition"}
+                </span>
                 <span className="mt-1 block font-semibold text-dark">
                   {nextCompetition.name} - {getDaysUntil(nextCompetition.competition_date)}
                 </span>
                 <span className="mt-1 block text-sm text-muted">
-                  Focus: {nextCompetition.focus_area || practicePlan.focusArea}
+                  Focus: {nextCompetition.focus_area || "Course strategy"}
                 </span>
               </span>
             </button>
           )}
         </Surface>
       </section>
+
+      {competitionToday && nextCompetition && (
+        <section className="mb-5 overflow-hidden rounded-2xl border border-gold/25 bg-dark text-white shadow-sm">
+          <div className="grid gap-5 p-5 lg:grid-cols-[1fr_auto] lg:items-center">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-gold">Competition Day Flow</p>
+              <h2 className="mt-2 text-3xl font-semibold tracking-tight">{nextCompetition.name}</h2>
+              <p className="mt-3 max-w-2xl text-sm leading-relaxed text-white/64">
+                Keep the day simple: review the focus, play the scorecard, then come back and reflect on what cost or saved shots.
+              </p>
+              <div className="mt-4 grid gap-2 text-sm text-white/70 sm:grid-cols-3">
+                <DarkStep label="1. Plan" value={nextCompetition.focus_area || "Course strategy"} />
+                <DarkStep label="2. Play" value={nextCompetition.course || "Course TBC"} />
+                <DarkStep label="3. Review" value={nextCompetition.target_score ? `Target ${nextCompetition.target_score}` : "Post-round notes"} />
+              </div>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-1">
+              <Button variant="gold" onClick={() => navigate("/golf/submit")}>Start Scorecard</Button>
+              <Button variant="secondary" onClick={() => navigate("/golf/practice-plan")} className="border-white/15 bg-white/10 text-white hover:bg-white/15">Warm-up Plan</Button>
+              <Button variant="secondary" onClick={() => navigate("/golf/competitions")} className="border-white/15 bg-white/10 text-white hover:bg-white/15">Open Review</Button>
+            </div>
+          </div>
+        </section>
+      )}
 
       <section className="mb-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <Kpi label="Avg Score" value={formatAverage(golfStats.avgScore)} sub={`${rounds.length} rounds`} tone="golf" />
@@ -244,63 +254,6 @@ export default function Dashboard() {
         <Kpi label="Avg Drive" value={formatDistance(golfStats.avgDrivingDistance)} sub="distance tracked" tone="golf" />
         <Kpi label="Up & Down" value={formatPercent(shortGameStats.upAndDownPercent)} sub={`${shortGameStats.upAndDowns}/${shortGameStats.chipChances} chip chances`} tone="golf" />
         <Kpi label="Sand Save" value={formatPercent(shortGameStats.sandSavePercent)} sub={`${shortGameStats.sandSaves}/${shortGameStats.sandSaveChances} bunker chances`} tone="golf" />
-      </section>
-
-      <section className="mb-5 grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
-        <Surface>
-          <SectionTitle
-            eyebrow="Insight Engine"
-            title="Performance signals"
-            action={<Brain className="h-5 w-5 text-pulse" />}
-          />
-          <div className="grid gap-3 md:grid-cols-2">
-            {performanceInsights.slice(0, 4).map((insight) => (
-              <InsightCard key={insight.title} insight={insight} />
-            ))}
-          </div>
-        </Surface>
-
-        <Surface className="bg-dark text-white">
-          <div className="mb-5">
-            <p className="mb-1 text-xs font-bold uppercase tracking-[0.18em] text-pulse">
-              Golf x Training
-            </p>
-            <h2 className="text-xl font-semibold tracking-tight text-white">
-              Relationship watch
-            </h2>
-          </div>
-          <div className="space-y-3">
-            {relationshipInsights.map((insight) => (
-              <RelationshipCard key={insight.title} insight={insight} />
-            ))}
-          </div>
-        </Surface>
-      </section>
-
-      <section className="mb-5 grid gap-5 xl:grid-cols-[1fr_0.9fr]">
-        <Surface>
-          <SectionTitle eyebrow="Coach Notes" title="This week's focus" />
-          <div className="grid gap-3 md:grid-cols-3">
-            <CoachNote title="Golf" text={coachNotes.golf} tone="golf" />
-            <CoachNote title="Training" text={coachNotes.training} tone="lab" />
-            <CoachNote title="Recovery" text={coachNotes.recovery} tone="pulse" />
-          </div>
-        </Surface>
-
-        <Surface className="border-golf/20 bg-golf/5">
-          <SectionTitle eyebrow="Recommended Practice" title={practicePlan.title} />
-          <p className="text-sm leading-relaxed text-muted">{practicePlan.detail}</p>
-          <div className="mt-4 flex flex-wrap gap-2">
-            {practicePlan.drills.map((drill) => (
-              <span key={drill} className="rounded-full bg-golf/10 px-3 py-1 text-xs font-semibold text-golf">
-                {drill}
-              </span>
-            ))}
-          </div>
-          <Button variant="golf" onClick={() => navigate(recommendedPracticeHref)} className="mt-5">
-            Start Recommended Practice
-          </Button>
-        </Surface>
       </section>
 
       <section className="grid gap-5 xl:grid-cols-[1fr_1fr_0.8fr]">
@@ -360,11 +313,6 @@ export default function Dashboard() {
                 Recent signal: {trainingIntel.recentPr.name} {trainingIntel.recentPr.weight} kg
               </p>
             )}
-            {alternatives.length > 0 && (
-              <p className="mt-3 text-sm text-muted">
-                Alternatives: {alternatives.slice(0, 3).join(", ")}
-              </p>
-            )}
           </div>
           {trainingIntel.muscleVolumes.length > 0 && (
             <div className="mt-5 space-y-3">
@@ -386,16 +334,16 @@ export default function Dashboard() {
             </div>
           </div>
           <p className="leading-relaxed text-white/68">
-            {rounds.length && workouts.length
-              ? nextCompetition
-                ? `Competition prep: prioritise ${nextCompetition.focus_area || practicePlan.focusArea.toLowerCase()} before ${nextCompetition.name}.`
-                : performanceInsights[0]?.action || practicePlan.detail
-              : "Start with one round and one training session so AthletiGolf can connect both sides of performance."}
+            {nextCompetition
+              ? `Competition prep: keep the week simple and focus on ${nextCompetition.focus_area || "course strategy"} before ${nextCompetition.name}.`
+              : rounds.length || workouts.length
+              ? "Keep the home screen tidy: log today's golf, training or wellness, then open AthletiAI for the deeper read."
+              : "Start with one round, one training session, or one wellness log so the dashboard has something to show."}
           </p>
           <div className="mt-6 grid gap-2">
             <Button variant="pulse" onClick={() => navigate("/golf/practice")} className="w-full">Log Practice</Button>
-            <Button variant="golf" onClick={() => navigate("/golf/practice-plan")} className="w-full">Generate Practice Plan</Button>
-            <Button variant="secondary" onClick={() => navigate("/analytics")} className="w-full border-white/15 bg-white/10 text-white hover:bg-white/15">Open Report</Button>
+            <Button variant="golf" onClick={() => navigate("/athletiai")} className="w-full">Open AthletiAI</Button>
+            <Button variant="secondary" onClick={() => navigate("/analytics")} className="w-full border-white/15 bg-white/10 text-white hover:bg-white/15">Open Analytics</Button>
           </div>
         </Surface>
       </section>
@@ -434,27 +382,7 @@ export default function Dashboard() {
         </Surface>
       </section>
 
-      <section className="mt-5">
-        <Surface>
-          <SectionTitle eyebrow="Data Health" title="Unlock sharper intelligence" />
-          <div className="grid gap-3 md:grid-cols-4">
-            {dataHealth.map((item) => (
-              <DataHealthCard key={item.label} item={item} />
-            ))}
-          </div>
-        </Surface>
-      </section>
     </main>
-  );
-}
-
-function CoachNote({ title, text, tone }: { title: string; text: string; tone: "golf" | "lab" | "pulse" }) {
-  const toneClass = tone === "golf" ? "border-golf/20 bg-golf/8" : tone === "lab" ? "border-lab/20 bg-lab/8" : "border-pulse/20 bg-pulse/8";
-  return (
-    <div className={`rounded-xl border p-4 ${toneClass}`}>
-      <p className="text-xs font-bold uppercase tracking-[0.16em] text-muted">{title}</p>
-      <p className="mt-3 text-sm leading-relaxed text-dark">{text}</p>
-    </div>
   );
 }
 
@@ -473,113 +401,21 @@ function MuscleBalance({ item, max }: { item: { muscle: string; volume: number }
   );
 }
 
-function DataHealthCard({ item }: { item: { label: string; detail: string; complete: boolean; current: number; target: number } }) {
-  return (
-    <div className="rounded-xl border border-line bg-white p-4">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <p className="font-semibold text-dark">{item.label}</p>
-        <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${item.complete ? "bg-golf/10 text-golf" : "bg-gold/15 text-gold"}`}>
-          {item.current}/{item.target}
-        </span>
-      </div>
-      <p className="text-sm text-muted">{item.detail}</p>
-    </div>
-  );
-}
-
-function InsightCard({ insight }: { insight: PerformanceInsight }) {
-  const toneClass = getInsightToneClass(insight.tone);
-  const signal = getSignalLabel(insight.signal, insight.priority);
-  return (
-    <div className={`rounded-xl border p-4 ${toneClass}`}>
-      <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
-        <h3 className="font-semibold leading-snug text-dark">{insight.title}</h3>
-        <div className="flex flex-wrap gap-2">
-          <span className="shrink-0 rounded-full bg-white/70 px-3 py-1 text-xs font-bold uppercase tracking-[0.12em] text-dark">
-            {signal}
-          </span>
-          {insight.metric && (
-            <span className="shrink-0 rounded-full bg-white/70 px-3 py-1 text-xs font-bold text-dark">
-              {insight.metric}
-            </span>
-          )}
-        </div>
-      </div>
-      <p className="text-sm leading-relaxed text-muted">{insight.detail}</p>
-      {insight.evidence && insight.evidence.length > 0 && (
-        <div className="mt-3 space-y-1 border-t border-line/70 pt-3">
-          {insight.evidence.slice(0, 2).map((item) => (
-            <p key={item} className="text-xs font-medium text-muted">Data: {item}</p>
-          ))}
-        </div>
-      )}
-      {insight.action && (
-        <p className="mt-3 text-sm font-semibold text-dark">Next: {insight.action}</p>
-      )}
-      {insight.needs && (
-        <p className="mt-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted">Needs {insight.needs}</p>
-      )}
-    </div>
-  );
-}
-
-function RelationshipCard({ insight }: { insight: RelationshipInsight }) {
-  return (
-    <div className="rounded-xl border border-white/10 bg-white/8 p-4">
-      <div className="mb-2 flex items-start justify-between gap-3">
-        <h3 className="font-semibold leading-snug text-white">{insight.title}</h3>
-        <span className="rounded-full bg-pulse/15 px-3 py-1 text-xs font-bold uppercase tracking-[0.12em] text-pulse">
-          {insight.confidence}
-        </span>
-      </div>
-      <p className="text-sm leading-relaxed text-white/64">{insight.detail}</p>
-      {insight.metrics && insight.metrics.length > 0 && (
-        <div className="mt-4 grid gap-2 sm:grid-cols-3">
-          {insight.metrics.map((metric) => (
-            <div key={metric.label} className="rounded-lg border border-white/10 bg-white/8 p-3">
-              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-white/40">{metric.label}</p>
-              <p className="mt-1 text-sm font-semibold text-white">{metric.value}</p>
-            </div>
-          ))}
-        </div>
-      )}
-      {insight.evidence && insight.evidence.length > 0 && (
-        <p className="mt-3 text-xs leading-relaxed text-white/50">
-          Data: {insight.evidence.slice(0, 2).join(" / ")}
-        </p>
-      )}
-      {insight.action && (
-        <p className="mt-3 text-sm font-semibold text-pulse">Next: {insight.action}</p>
-      )}
-      {insight.needs && (
-        <p className="mt-2 text-xs font-semibold uppercase tracking-[0.12em] text-white/45">Needs {insight.needs}</p>
-      )}
-    </div>
-  );
-}
-
-function getSignalLabel(signal: PerformanceInsight["signal"], priority: number) {
-  if (signal === "needs-data") return "Needs Data";
-  if (signal === "strong") return "Strong Signal";
-  if (signal === "building") return "Building Signal";
-  if (signal === "early") return "Early Signal";
-  if (priority >= 90) return "Strong Signal";
-  if (priority >= 75) return "Building Signal";
-  return "Early Signal";
-}
-
-function getInsightToneClass(tone: PerformanceInsight["tone"]) {
-  if (tone === "golf") return "border-golf/20 bg-golf/8";
-  if (tone === "lab") return "border-lab/20 bg-lab/8";
-  if (tone === "warning") return "border-gold/30 bg-gold/12";
-  return "border-pulse/20 bg-pulse/8";
-}
 
 function MiniMetric({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="rounded-xl border border-white/10 bg-white/8 p-4">
       <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/45">{label}</p>
       <p className="mt-3 text-3xl font-semibold">{value}</p>
+    </div>
+  );
+}
+
+function DarkStep({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="rounded-lg border border-white/10 bg-white/8 p-3">
+      <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-white/40">{label}</p>
+      <p className="mt-1 font-semibold text-white">{value}</p>
     </div>
   );
 }
@@ -833,6 +669,14 @@ function getDaysUntil(value: string) {
   if (days === 0) return "today";
   if (days === 1) return "tomorrow";
   return `${days} days away`;
+}
+
+function isToday(value: string) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const target = new Date(value);
+  target.setHours(0, 0, 0, 0);
+  return target.getTime() === today.getTime();
 }
 
 function getActivityLabel(activity: LiveActivity["activity_type"]) {

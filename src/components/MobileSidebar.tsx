@@ -34,6 +34,7 @@ type NavItem = {
 const mainLinks: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/analytics", label: "Analytics", icon: BarChart3, tone: "gold" },
+  { href: "/athletiai", label: "AthletiAI", icon: Brain, tone: "pulse" },
   { href: "/wellness", label: "Wellness", icon: Droplets, tone: "pulse" },
   { href: "/social", label: "Social", icon: Users, tone: "pulse" },
   { href: "/profile", label: "Profile", icon: User },
@@ -64,6 +65,7 @@ const supportLinks: NavItem[] = [
 const titles: Record<string, { title: string; section: string }> = {
   "/dashboard": { title: "Command Center", section: "Today" },
   "/analytics": { title: "Performance Report", section: "Analysis" },
+  "/athletiai": { title: "AthletiAI", section: "Insight Engine" },
   "/wellness": { title: "Wellness", section: "Recovery" },
   "/social": { title: "Social", section: "Live Activity" },
   "/profile": { title: "Athlete Profile", section: "Account" },

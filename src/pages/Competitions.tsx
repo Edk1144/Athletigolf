@@ -140,6 +140,7 @@ export default function Competitions() {
     [competitions]
   );
   const nextCompetition = upcoming[0] || null;
+  const todayCompetition = upcoming.find((competition) => isToday(competition.competition_date)) || null;
 
   if (loading) {
     return (
@@ -234,6 +235,36 @@ export default function Competitions() {
           )}
         </Surface>
       </section>
+
+      {todayCompetition && (
+        <section className="mb-5 overflow-hidden rounded-2xl border border-gold/25 bg-dark text-white shadow-sm">
+          <div className="grid gap-5 p-5 lg:grid-cols-[1fr_auto] lg:items-center">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-gold">Today</p>
+              <h2 className="mt-2 text-3xl font-semibold tracking-tight">{todayCompetition.name}</h2>
+              <p className="mt-3 max-w-2xl text-sm leading-relaxed text-white/64">
+                Stay boring in the best way: commit to the focus, avoid the big miss, then come back here for the review.
+              </p>
+              <div className="mt-4 grid gap-2 text-sm sm:grid-cols-3">
+                <DarkMetric label="Focus" value={todayCompetition.focus_area || "Course strategy"} />
+                <DarkMetric label="Target" value={todayCompetition.target_score || "-"} />
+                <DarkMetric label="Start" value={todayCompetition.start_time || "TBC"} />
+              </div>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-1">
+              <Button variant="gold" onClick={() => (window.location.href = "/golf/submit")}>
+                Start Scorecard
+              </Button>
+              <Button variant="secondary" onClick={() => openEditor(todayCompetition)} className="border-white/15 bg-white/10 text-white hover:bg-white/15">
+                Edit Plan
+              </Button>
+              <Button variant="secondary" onClick={() => (window.location.href = "/golf/practice-plan")} className="border-white/15 bg-white/10 text-white hover:bg-white/15">
+                Warm-up Plan
+              </Button>
+            </div>
+          </div>
+        </section>
+      )}
 
       <section className="grid gap-5 xl:grid-cols-[1fr_0.9fr]">
         <Surface>
@@ -469,6 +500,14 @@ function getDaysUntil(value: string) {
   if (days === 0) return "today";
   if (days === 1) return "tomorrow";
   return `${days} days away`;
+}
+
+function isToday(value: string) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const target = new Date(value);
+  target.setHours(0, 0, 0, 0);
+  return target.getTime() === today.getTime();
 }
 
 function formatDate(value: string) {
