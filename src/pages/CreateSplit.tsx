@@ -217,6 +217,7 @@ export default function CreateSplit() {
   const selectedExerciseGuide = selectedExercise ? getExerciseGuide(selectedExercise) : null;
   const hasBoardContent = split.some((day) => day.focus.trim() || day.exercises.length > 0);
   const showBoard = hasBoardContent || !showCreateChoice;
+  const canSaveBoard = showBoard && !showCreateChoice;
 
   if (loading) {
     return (
@@ -246,7 +247,7 @@ export default function CreateSplit() {
                 <Archive className="h-4 w-4" />
                 View Archived Splits
               </Button>
-              {showBoard && hasActiveSplit && (
+              {canSaveBoard && (
                 <>
                   <Button type="button" onClick={takeSplitQuiz} variant="secondary">
                     <Wand2 className="h-4 w-4" />
@@ -353,7 +354,7 @@ export default function CreateSplit() {
           </Surface>
         ) : null}
 
-        {showBoard && hasActiveSplit && (
+        {canSaveBoard && (
         <div className="mt-10 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <Surface className="flex-1">
             <p className="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-lab">Board logic</p>
@@ -375,22 +376,26 @@ export default function CreateSplit() {
             >
               {saving ? "Saving..." : "Save Board"}
             </Button>
-            <Button
-              onClick={archiveCurrentSplit}
-              disabled={busyAction === "archive"}
-              variant="secondary"
-            >
-              <Archive className="h-4 w-4" />
-              {busyAction === "archive" ? "Archiving..." : "Archive Current"}
-            </Button>
-            <Button
-              onClick={removeCurrentSplit}
-              disabled={busyAction === "remove"}
-              variant="danger"
-            >
-              <Trash2 className="h-4 w-4" />
-              {busyAction === "remove" ? "Removing..." : "Remove Current"}
-            </Button>
+            {hasActiveSplit && (
+              <>
+                <Button
+                  onClick={archiveCurrentSplit}
+                  disabled={busyAction === "archive"}
+                  variant="secondary"
+                >
+                  <Archive className="h-4 w-4" />
+                  {busyAction === "archive" ? "Archiving..." : "Archive Current"}
+                </Button>
+                <Button
+                  onClick={removeCurrentSplit}
+                  disabled={busyAction === "remove"}
+                  variant="danger"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  {busyAction === "remove" ? "Removing..." : "Remove Current"}
+                </Button>
+              </>
+            )}
           </div>
         </div>
         )}

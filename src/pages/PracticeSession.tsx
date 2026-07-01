@@ -29,6 +29,12 @@ const drillOptionsMap: Record<PracticeType, string[]> = {
 };
 
 const practiceTypes: PracticeType[] = ["Driving Range", "Putting", "Chipping", "Short Game", "On Course"];
+const blankPracticePlan = {
+  practiceType: "Driving Range" as PracticeType,
+  focusArea: "",
+  drills: [] as PracticeDrillForm[],
+  loadedFromPlan: false,
+};
 
 function isPracticeType(value: string | null): value is PracticeType {
   return !!value && practiceTypes.includes(value as PracticeType);
@@ -61,7 +67,7 @@ function getInitialPracticePlan() {
 
 export default function PracticeSession() {
   const [, navigate] = useLocation();
-  const [initialPlan] = useState(getInitialPracticePlan);
+  const [initialPlan, setInitialPlan] = useState(getInitialPracticePlan);
   const [practiceType, setPracticeType] = useState<PracticeType>(initialPlan.practiceType);
   const [durationMinutes, setDurationMinutes] = useState("");
   const [focusArea, setFocusArea] = useState(initialPlan.focusArea);
@@ -102,6 +108,22 @@ export default function PracticeSession() {
     setSubmitted(true);
   };
 
+  const resetPracticeForm = () => {
+    setInitialPlan(blankPracticePlan);
+    setPracticeType(blankPracticePlan.practiceType);
+    setDurationMinutes("");
+    setFocusArea("");
+    setDrills([]);
+    setRating("");
+    setNotes("");
+    setSaveError("");
+    setSubmitted(false);
+
+    if (typeof window !== "undefined" && window.location.search) {
+      window.history.replaceState({}, "", "/golf/practice");
+    }
+  };
+
   if (submitted) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-cream p-6 text-ink">
@@ -110,7 +132,7 @@ export default function PracticeSession() {
           <h1 className="mb-4 text-4xl font-semibold">Practice Logged</h1>
           <p className="mb-8 text-muted">Nice work. Your practice session has been saved.</p>
           <div className="flex flex-col justify-center gap-4 sm:flex-row">
-            <Button variant="golf" onClick={() => navigate("/golf/practice")}>Log Another</Button>
+            <Button variant="golf" onClick={resetPracticeForm}>Log Another</Button>
             <Button variant="primary" onClick={() => navigate("/golf/practice-history")}>View History</Button>
           </div>
         </div>

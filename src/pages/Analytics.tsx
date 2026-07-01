@@ -67,7 +67,7 @@ export default function Analytics() {
   const penaltyControl = lowerIsBetterControl(golfStats.avgPenaltyShots, 0, 4);
   const puttingControl = lowerIsBetterControl(golfStats.avgPutts, 30, 42);
   const roundsWithScores = rounds.filter((r) => r.score !== null);
-  const recentScores = roundsWithScores.slice(0, 8).reverse().map((r) => r.score || 0);
+  const recentScoreRounds = roundsWithScores.slice(0, 12).reverse();
   const workoutsThisWeek = (() => {
     const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     return workouts.filter((w) => w.created_at && new Date(w.created_at) >= weekAgo).length;
@@ -172,22 +172,8 @@ export default function Analytics() {
         <div className="space-y-5">
           <Surface>
             <SectionTitle eyebrow="Score Trend" title="Recent rounds" action={<BarChart3 className="h-5 w-5 text-muted" />} />
-            {recentScores.length ? (
-              <div className="flex h-80 items-end gap-3 overflow-x-auto pb-2">
-                {recentScores.map((score, index) => {
-                  const minScore = Math.min(...recentScores);
-                  const maxScore = Math.max(...recentScores);
-                  const range = maxScore - minScore || 1;
-                  const height = ((maxScore - score) / range) * 220 + 42;
-                  return (
-                    <div key={`${score}-${index}`} className="flex min-w-16 flex-1 flex-col items-center justify-end gap-3">
-                      <p className="text-sm font-semibold text-dark">{score}</p>
-                      <div className="w-full rounded-t-lg bg-gradient-to-t from-golf to-pulse" style={{ height }} />
-                      <p className="text-xs text-muted">R{index + 1}</p>
-                    </div>
-                  );
-                })}
-              </div>
+            {recentScoreRounds.length ? (
+              <ScoreLineChart rounds={recentScoreRounds} />
             ) : (
               <EmptyState
                 title="No scores yet"
@@ -405,18 +391,168 @@ function ReportKpi({
   );
 }
 
+function ScoreLineChart({ rounds }: { rounds: Round[] }) {
+  const scores = rounds.map((round) => round.score || 0);
+  const bestScore = Math.min(...scores);
+  const worstScore = Math.max(...scores);
+  const lower = Math.max(0, Math.floor(bestScore - 2));
+  const upper = Math.ceil(worstScore + 2);
+  const range = upper - lower || 1;
+  const width = Math.max(760, rounds.length * 92);
+  const height = 330;
+  const padding = { top: 34, right: 34, bottom: 58, left: 48 };
+  const plotWidth = width - padding.left - padding.right;
+  const plotHeight = height - padding.top - padding.bottom;
+  const points = rounds.map((round, index) => {
+    const x = rounds.length === 1 ? padding.left + plotWidth / 2 : padding.left + (index / (rounds.length - 1)) * plotWidth;
+    const y = padding.top + ((upper - (round.score || 0)) / range) * plotHeight;
+    return { x, y, score: round.score || 0, round };
+  });
+  const average = scores.reduce((sum, score) => sum + score, 0) / scores.length;
+  const averageY = padding.top + ((upper - average) / range) * plotHeight;
+  const ticks = Array.from({ length: 5 }, (_, index) => {
+    const value = lower + (range / 4) * index;
+    const y = padding.top + ((upper - value) / range) * plotHeight;
+    return { value: Math.round(value), y };
+  }).reverse();
+  const path = buildSmoothPath(points);
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-line bg-white/70 dark:bg-panel">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3">
+        <div>
+          <p className="text-sm font-semibold text-dark">Score movement</p>
+          <p className="text-xs text-muted">Lower scores are better. Last {rounds.length} submitted rounds.</p>
+        </div>
+        <div className="flex flex-wrap gap-2 text-xs font-semibold text-muted">
+          <LegendDot color="bg-golf" label="Best" />
+          <LegendDot color="bg-gold" label="Counting trend" />
+          <LegendDot color="bg-danger" label="Highest" />
+        </div>
+      </div>
+      <div className="overflow-x-auto">
+        <svg
+          viewBox={`0 0 ${width} ${height}`}
+          className="h-[330px] min-w-full"
+          role="img"
+          aria-label="Recent round score line chart"
+        >
+          <rect x="0" y="0" width={width} height={height} className="fill-transparent" />
+          {ticks.map((tick) => (
+            <g key={tick.value}>
+              <line
+                x1={padding.left}
+                x2={width - padding.right}
+                y1={tick.y}
+                y2={tick.y}
+                stroke="currentColor"
+                className="text-line"
+                strokeWidth="1"
+              />
+              <text x={padding.left - 14} y={tick.y + 4} textAnchor="end" className="fill-muted text-[11px] font-semibold">
+                {tick.value}
+              </text>
+            </g>
+          ))}
+          <line
+            x1={padding.left}
+            x2={width - padding.right}
+            y1={averageY}
+            y2={averageY}
+            stroke="currentColor"
+            className="text-gold"
+            strokeDasharray="5 7"
+            strokeWidth="1.5"
+          />
+          <path d={path} fill="none" stroke="currentColor" className="text-pulse" strokeWidth="3.5" strokeLinecap="round" />
+          <path
+            d={`${path} L ${points[points.length - 1].x} ${height - padding.bottom} L ${points[0].x} ${height - padding.bottom} Z`}
+            className="fill-pulse/10"
+          />
+          {points.map((point, index) => {
+            const isBest = point.score === bestScore;
+            const isWorst = point.score === worstScore;
+            const fillClass = isBest ? "fill-golf" : isWorst ? "fill-danger" : "fill-gold";
+            const dateLabel = formatRoundDate(point.round.created_at);
+            return (
+              <g key={`${point.round.id}-${index}`}>
+                <line
+                  x1={point.x}
+                  x2={point.x}
+                  y1={point.y}
+                  y2={height - padding.bottom}
+                  stroke="currentColor"
+                  className="text-line"
+                  strokeDasharray="3 8"
+                  strokeWidth="1"
+                />
+                <circle cx={point.x} cy={point.y} r="6.5" className={`${fillClass} stroke-white`} strokeWidth="2.5" />
+                <text x={point.x} y={point.y - 14} textAnchor="middle" className="fill-dark text-[12px] font-bold">
+                  {point.score}
+                </text>
+                <text x={point.x} y={height - 27} textAnchor="middle" className="fill-muted text-[11px] font-semibold">
+                  {dateLabel}
+                </text>
+              </g>
+            );
+          })}
+          <text x={width - padding.right} y={averageY - 8} textAnchor="end" className="fill-gold text-[11px] font-bold uppercase tracking-[0.12em]">
+            Avg {average.toFixed(1)}
+          </text>
+        </svg>
+      </div>
+    </div>
+  );
+}
+
+function LegendDot({ color, label }: { color: string; label: string }) {
+  return (
+    <span className="inline-flex items-center gap-2 rounded-full border border-line bg-panel px-3 py-1">
+      <span className={`h-2 w-2 rounded-full ${color}`} />
+      {label}
+    </span>
+  );
+}
+
+function buildSmoothPath(points: { x: number; y: number }[]) {
+  if (points.length === 1) return `M ${points[0].x} ${points[0].y}`;
+
+  return points.reduce((path, point, index) => {
+    if (index === 0) return `M ${point.x} ${point.y}`;
+
+    const previous = points[index - 1];
+    const controlDistance = (point.x - previous.x) * 0.42;
+    return `${path} C ${previous.x + controlDistance} ${previous.y}, ${point.x - controlDistance} ${point.y}, ${point.x} ${point.y}`;
+  }, "");
+}
+
+function formatRoundDate(value?: string | null) {
+  if (!value) return "Round";
+
+  return new Date(value).toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+  });
+}
+
 function Metric({ label, value, color }: { label: string; value: string; color: string }) {
   const numericValue = Number.parseFloat(value);
-  const width = value.includes("%") ? value : `${Math.min(numericValue * 0.4 || 18, 100)}%`;
+  const isPercent = value.includes("%") && Number.isFinite(numericValue);
+  const width = isPercent ? `${Math.max(4, Math.min(numericValue, 100))}%` : "100%";
   return (
-    <div>
-      <div className="mb-2 flex items-center justify-between gap-4">
-        <p className="text-sm font-medium text-muted">{label}</p>
-        <p className="font-semibold text-dark">{value}</p>
+    <div className="rounded-xl border border-line bg-white/70 p-4 dark:bg-panel">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.14em] text-muted">{label}</p>
+          <div className={`mt-3 h-1 w-10 rounded-full ${color}`} />
+        </div>
+        <p className="text-right text-lg font-semibold text-dark">{value}</p>
       </div>
-      <div className="h-2 overflow-hidden rounded-full bg-steel/10">
-        <div className={`h-full rounded-full ${color}`} style={{ width }} />
-      </div>
+      {isPercent && (
+        <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-steel/10">
+          <div className={`h-full rounded-full ${color}`} style={{ width }} />
+        </div>
+      )}
     </div>
   );
 }
@@ -447,15 +583,15 @@ function ControlMetric({
       : "bg-warning";
 
   return (
-    <div>
-      <div className="mb-2 flex items-center justify-between gap-4">
+    <div className="rounded-xl border border-line bg-white/70 p-4 dark:bg-panel">
+      <div className="mb-3 flex items-center justify-between gap-4">
         <div>
-          <p className="text-sm font-medium text-muted">{label}</p>
+          <p className="text-xs font-bold uppercase tracking-[0.14em] text-muted">{label}</p>
           <p className="text-xs text-muted">{sub}</p>
         </div>
-        <p className="font-semibold text-dark">{value}</p>
+        <p className="text-lg font-semibold text-dark">{value}</p>
       </div>
-      <div className="relative h-2 overflow-hidden rounded-full bg-danger/15">
+      <div className="relative h-1.5 overflow-hidden rounded-full bg-danger/15">
         <div className={`absolute right-0 h-full rounded-full ${color}`} style={{ width }} />
       </div>
       <div className="mt-1 flex justify-between text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">
