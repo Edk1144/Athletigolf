@@ -31,6 +31,9 @@ export type OnboardingData = {
       sleepHours: number;
     };
   };
+  privacy?: {
+    defaultLiveVisibility: "friends" | "private";
+  };
   golf: {
     homeCourse: string;
     handicap: string;
@@ -204,6 +207,8 @@ export type FriendConnection = {
   id: string;
   requester_id: string;
   receiver_id: string;
+  requester_label?: string | null;
+  receiver_label?: string | null;
   status: "pending" | "accepted" | "blocked";
   created_at: string;
   updated_at?: string | null;

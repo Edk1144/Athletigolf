@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
+import { Copy, ShieldCheck } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { applyTheme, type AppTheme } from "@/lib/theme";
+import type { OnboardingData } from "@/lib/types";
 
 type SaveState = "idle" | "saving" | "success" | "error";
 
@@ -14,6 +16,8 @@ export default function Settings() {
   const [, navigate] = useLocation();
 
   const [email, setEmail] = useState("");
+  const [userId, setUserId] = useState("");
+  const [onboardingData, setOnboardingData] = useState<OnboardingData | null>(null);
   const [loading, setLoading] = useState(true);
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [errorMessage, setErrorMessage] = useState("");
@@ -28,6 +32,7 @@ export default function Settings() {
     weight_unit: "kg",
     theme: "light",
     notifications_enabled: false,
+    default_live_visibility: "friends" as "friends" | "private",
   });
 
   useEffect(() => {
@@ -45,6 +50,7 @@ export default function Settings() {
     }
 
     setEmail(user.email || "");
+    setUserId(user.id);
 
     const { data } = await supabase
       .from("profiles")
@@ -54,6 +60,8 @@ export default function Settings() {
 
     if (data) {
       const theme = data.theme === "dark" ? "dark" : "light";
+      const existingOnboarding = (data.onboarding_data as OnboardingData | null) || null;
+      setOnboardingData(existingOnboarding);
       setProfile({
         full_name: data.full_name || "",
         golf_handicap: data.golf_handicap?.toString() || "",
@@ -64,6 +72,7 @@ export default function Settings() {
         weight_unit: data.weight_unit || "kg",
         theme,
         notifications_enabled: data.notifications_enabled ?? false,
+        default_live_visibility: existingOnboarding?.privacy?.defaultLiveVisibility || "friends",
       });
       applyTheme(theme);
     }
@@ -93,6 +102,13 @@ export default function Settings() {
       weight_unit: profile.weight_unit,
       theme: profile.theme,
       notifications_enabled: profile.notifications_enabled,
+      onboarding_data: {
+        ...(onboardingData || {}),
+        privacy: {
+          ...((onboardingData as OnboardingData | null)?.privacy || {}),
+          defaultLiveVisibility: profile.default_live_visibility,
+        },
+      },
       updated_at: new Date().toISOString(),
     });
 
@@ -122,6 +138,24 @@ export default function Settings() {
         <p className="text-muted">Loading settings...</p>
       </div>
     );
+  }
+
+  async function endAllLiveCheckIns() {
+    setSaveState("saving");
+    setErrorMessage("");
+    const { error } = await supabase
+      .from("live_activities")
+      .update({ ended_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+      .is("ended_at", null);
+
+    if (error) {
+      setSaveState("error");
+      setErrorMessage(error.message || "Could not end live check-ins.");
+      return;
+    }
+
+    setSaveState("success");
+    setTimeout(() => setSaveState("idle"), 3000);
   }
 
   return (
@@ -295,6 +329,77 @@ export default function Settings() {
             </label>
           </div>
 
+          {/* PRIVACY */}
+          <div className="rounded-xl border border-line bg-panel p-6 shadow-sm">
+            <div className="mb-6 flex items-start gap-3">
+              <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-pulse/10 text-pulse">
+                <ShieldCheck className="h-5 w-5" />
+              </span>
+              <div>
+                <h2 className="text-2xl font-semibold text-dark">Privacy & Safety</h2>
+                <p className="mt-2 text-muted">
+                  Control what friends can see and keep the alpha social features easy to understand.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
+              <div className="space-y-5">
+                <div>
+                  <label className="mb-2 block text-sm text-muted">Default live check-in visibility</label>
+                  <select
+                    className="w-full rounded-lg border border-line bg-white p-4 text-ink outline-none transition focus:border-pulse/50 focus:ring-4 focus:ring-pulse/10"
+                    value={profile.default_live_visibility}
+                    onChange={(e) => set("default_live_visibility", e.target.value as "friends" | "private")}
+                  >
+                    <option value="friends">Friends only</option>
+                    <option value="private">Private by default</option>
+                  </select>
+                </div>
+
+                <div className="rounded-xl border border-pulse/20 bg-pulse/8 p-4">
+                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-muted">Your friend code</p>
+                  <div className="mt-2 flex items-center gap-2">
+                    <code className="min-w-0 flex-1 truncate rounded-lg bg-white/70 px-3 py-2 text-xs font-semibold text-dark">
+                      {userId || "Loading..."}
+                    </code>
+                    <button
+                      type="button"
+                      onClick={() => navigator.clipboard?.writeText(userId)}
+                      className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-line bg-white text-dark transition hover:border-pulse/40"
+                      disabled={!userId}
+                    >
+                      <Copy className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <p className="mt-2 text-sm text-muted">Only share this with people you want to add.</p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={endAllLiveCheckIns}
+                  className="w-full rounded-lg border border-danger/25 bg-danger/10 px-5 py-3 text-sm font-semibold text-danger transition hover:bg-danger/15"
+                >
+                  End all live check-ins
+                </button>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <PrivacyNote title="Golf rounds" detail="Private to your account." />
+                <PrivacyNote title="Training logs" detail="Private to your account." />
+                <PrivacyNote title="Wellness logs" detail="Private to your account." />
+                <PrivacyNote title="Live check-ins" detail="Private or accepted friends only." />
+                <div className="rounded-xl border border-line bg-white/70 p-4 md:col-span-2">
+                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-muted">Alpha privacy notice</p>
+                  <p className="mt-2 text-sm leading-relaxed text-muted">
+                    AthletiGolf stores your golf, training, wellness and social activity data to power your dashboard.
+                    Private logs are not shown to other users. Friends-only live check-ins are visible only to accepted friends.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* ONBOARDING */}
           <div className="rounded-xl border border-line bg-panel p-6 shadow-sm">
             <h2 className="mb-2 text-2xl font-semibold text-dark">Setup Profile</h2>
@@ -357,6 +462,15 @@ export default function Settings() {
         </section>
 
       </div>
+    </div>
+  );
+}
+
+function PrivacyNote({ title, detail }: { title: string; detail: string }) {
+  return (
+    <div className="rounded-xl border border-line bg-white/70 p-4">
+      <h3 className="font-semibold text-dark">{title}</h3>
+      <p className="mt-2 text-sm leading-relaxed text-muted">{detail}</p>
     </div>
   );
 }

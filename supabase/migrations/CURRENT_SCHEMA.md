@@ -262,6 +262,8 @@ Required columns:
 - `id uuid primary key`
 - `requester_id uuid default auth.uid()`
 - `receiver_id uuid`
+- `requester_label text`
+- `receiver_label text`
 - `status text default 'pending'`
 - `created_at timestamptz`
 - `updated_at timestamptz`

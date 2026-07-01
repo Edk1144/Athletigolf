@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { Activity, Check, Copy, Dumbbell, Flag, MapPin, ShieldCheck, UserPlus, Users, X } from "lucide-react";
+import { Activity, Check, Copy, Dumbbell, Flag, MapPin, Pencil, ShieldCheck, UserPlus, Users, X } from "lucide-react";
 import { Button, EmptyState, FieldLabel, PageHeader, SelectInput, Surface, TextArea, TextInput } from "@/components/ui";
 import { supabase } from "@/lib/supabase";
-import type { FriendConnection, LiveActivity } from "@/lib/types";
+import type { FriendConnection, LiveActivity, OnboardingData } from "@/lib/types";
 
 type ActivityType = LiveActivity["activity_type"];
 
@@ -22,6 +22,8 @@ export default function Social() {
   const [detail, setDetail] = useState("");
   const [visibility, setVisibility] = useState<LiveActivity["visibility"]>("friends");
   const [friendId, setFriendId] = useState("");
+  const [editingFriendId, setEditingFriendId] = useState("");
+  const [friendLabel, setFriendLabel] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -32,7 +34,7 @@ export default function Social() {
 
   async function loadSocial() {
     setLoading(true);
-    const [{ data: authData }, { data: active }, { data: friends }] = await Promise.all([
+    const [{ data: authData }, { data: active }, { data: friends }, { data: profile }] = await Promise.all([
       supabase.auth.getUser(),
       supabase
         .from("live_activities")
@@ -43,11 +45,14 @@ export default function Social() {
         .from("friend_connections")
         .select("*")
         .order("created_at", { ascending: false }),
+      supabase.from("profiles").select("onboarding_data").maybeSingle(),
     ]);
 
     setUserId(authData.user?.id || "");
     setActivities((active as LiveActivity[]) || []);
     setConnections((friends as FriendConnection[]) || []);
+    const onboarding = (profile?.onboarding_data as OnboardingData | null) || null;
+    setVisibility(onboarding?.privacy?.defaultLiveVisibility || "friends");
     setLoading(false);
   }
 
@@ -167,8 +172,42 @@ export default function Social() {
     await loadSocial();
   }
 
+  async function saveFriendLabel(connection: FriendConnection) {
+    const labelColumn = connection.requester_id === userId ? "requester_label" : "receiver_label";
+    setSaving(true);
+    setError("");
+    const { error: updateError } = await supabase
+      .from("friend_connections")
+      .update({ [labelColumn]: friendLabel.trim() || null, updated_at: new Date().toISOString() })
+      .eq("id", connection.id);
+    setSaving(false);
+
+    if (updateError) {
+      setError(updateError.message);
+      return;
+    }
+
+    setEditingFriendId("");
+    setFriendLabel("");
+    await loadSocial();
+  }
+
+  function startRename(connection: FriendConnection) {
+    setEditingFriendId(connection.id);
+    setFriendLabel(getConnectionLabel(connection, userId));
+  }
+
   const activeActivity = activities.find((activity) => activity.user_id === userId) || null;
   const friendActivities = activities.filter((activity) => activity.user_id !== userId);
+  const friendNameById = useMemo(() => {
+    const names = new Map<string, string>();
+    connections.forEach((connection) => {
+      if (connection.status !== "accepted") return;
+      const otherId = getOtherUserId(connection, userId);
+      names.set(otherId, getConnectionLabel(connection, userId));
+    });
+    return names;
+  }, [connections, userId]);
   const incomingRequests = connections.filter(
     (connection) => connection.receiver_id === userId && connection.status === "pending"
   );
@@ -279,7 +318,7 @@ export default function Social() {
             {friendActivities.length ? (
               <div className="space-y-3">
                 {friendActivities.map((activity) => (
-                  <ActivityRow key={activity.id} activity={activity} />
+                  <ActivityRow key={activity.id} activity={activity} name={friendNameById.get(activity.user_id)} />
                 ))}
               </div>
             ) : (
@@ -329,6 +368,12 @@ export default function Social() {
                 empty="No incoming requests."
                 connections={incomingRequests}
                 userId={userId}
+                editingFriendId={editingFriendId}
+                friendLabel={friendLabel}
+                setFriendLabel={setFriendLabel}
+                onRename={startRename}
+                onSaveLabel={saveFriendLabel}
+                onCancelRename={() => setEditingFriendId("")}
                 action={(connection) => (
                   <div className="flex gap-2">
                     <Button type="button" variant="secondary" onClick={() => updateConnection(connection.id, "accepted")} disabled={saving}>
@@ -345,6 +390,12 @@ export default function Social() {
                 empty="No outgoing requests."
                 connections={outgoingRequests}
                 userId={userId}
+                editingFriendId={editingFriendId}
+                friendLabel={friendLabel}
+                setFriendLabel={setFriendLabel}
+                onRename={startRename}
+                onSaveLabel={saveFriendLabel}
+                onCancelRename={() => setEditingFriendId("")}
                 action={(connection) => (
                   <Button type="button" variant="ghost" onClick={() => removeConnection(connection.id)} disabled={saving}>
                     Cancel
@@ -356,6 +407,12 @@ export default function Social() {
                 empty="No accepted friends yet."
                 connections={acceptedConnections}
                 userId={userId}
+                editingFriendId={editingFriendId}
+                friendLabel={friendLabel}
+                setFriendLabel={setFriendLabel}
+                onRename={startRename}
+                onSaveLabel={saveFriendLabel}
+                onCancelRename={() => setEditingFriendId("")}
                 action={(connection) => (
                   <Button type="button" variant="ghost" onClick={() => removeConnection(connection.id)} disabled={saving}>
                     Remove
@@ -426,7 +483,7 @@ function PrivacyCard({ title, detail }: { title: string; detail: string }) {
   );
 }
 
-function ActivityRow({ activity }: { activity: LiveActivity }) {
+function ActivityRow({ activity, name }: { activity: LiveActivity; name?: string }) {
   return (
     <div className="rounded-xl border border-line bg-white/70 p-4">
       <div className="flex items-start justify-between gap-3">
@@ -435,9 +492,7 @@ function ActivityRow({ activity }: { activity: LiveActivity }) {
           <p className="mt-1 text-sm text-muted">
             {activity.location_name || "No location"} {activity.detail ? `- ${activity.detail}` : ""}
           </p>
-          <p className="mt-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted">
-            Friend {activity.user_id.slice(0, 8)}
-          </p>
+          <p className="mt-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted">{name || `Friend ${activity.user_id.slice(0, 8)}`}</p>
         </div>
         <span className="rounded-full bg-pulse/10 px-3 py-1 text-xs font-bold text-pulse">Live</span>
       </div>
@@ -451,12 +506,24 @@ function ConnectionSection({
   connections,
   userId,
   action,
+  editingFriendId,
+  friendLabel,
+  setFriendLabel,
+  onRename,
+  onSaveLabel,
+  onCancelRename,
 }: {
   title: string;
   empty: string;
   connections: FriendConnection[];
   userId: string;
   action: (connection: FriendConnection) => React.ReactNode;
+  editingFriendId: string;
+  friendLabel: string;
+  setFriendLabel: (value: string) => void;
+  onRename: (connection: FriendConnection) => void;
+  onSaveLabel: (connection: FriendConnection) => void;
+  onCancelRename: () => void;
 }) {
   return (
     <div>
@@ -464,11 +531,34 @@ function ConnectionSection({
       {connections.length ? (
         <div className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-white/70">
           {connections.map((connection) => {
-            const otherId = connection.requester_id === userId ? connection.receiver_id : connection.requester_id;
+            const otherId = getOtherUserId(connection, userId);
+            const label = getConnectionLabel(connection, userId);
             return (
               <div key={connection.id} className="grid gap-3 p-4 md:grid-cols-[1fr_120px_auto] md:items-center">
                 <div>
-                  <h4 className="font-semibold text-dark">Friend {otherId.slice(0, 8)}</h4>
+                  {editingFriendId === connection.id ? (
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <TextInput value={friendLabel} onChange={(event) => setFriendLabel(event.target.value)} placeholder="Friend nickname" />
+                      <Button type="button" variant="pulse" onClick={() => onSaveLabel(connection)}>
+                        Save
+                      </Button>
+                      <Button type="button" variant="ghost" onClick={onCancelRename}>
+                        Cancel
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h4 className="font-semibold text-dark">{label}</h4>
+                      <button
+                        type="button"
+                        onClick={() => onRename(connection)}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted transition hover:bg-steel/10 hover:text-dark"
+                        aria-label={`Rename ${label}`}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                    </div>
+                  )}
                   <p className="mt-1 truncate text-sm text-muted">{otherId}</p>
                 </div>
                 <span className={getConnectionClass(connection.status)}>{connection.status}</span>
@@ -482,6 +572,15 @@ function ConnectionSection({
       )}
     </div>
   );
+}
+
+function getOtherUserId(connection: FriendConnection, userId: string) {
+  return connection.requester_id === userId ? connection.receiver_id : connection.requester_id;
+}
+
+function getConnectionLabel(connection: FriendConnection, userId: string) {
+  const label = connection.requester_id === userId ? connection.requester_label : connection.receiver_label;
+  return label || `Friend ${getOtherUserId(connection, userId).slice(0, 8)}`;
 }
 
 function getActivityLabel(activity: ActivityType) {
