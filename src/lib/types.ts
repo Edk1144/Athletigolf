@@ -184,3 +184,26 @@ export type WellnessLog = {
   created_at: string;
   updated_at?: string | null;
 };
+
+export type FriendConnection = {
+  id: string;
+  requester_id: string;
+  receiver_id: string;
+  status: "pending" | "accepted" | "blocked";
+  created_at: string;
+  updated_at?: string | null;
+};
+
+export type LiveActivity = {
+  id: string;
+  user_id: string;
+  activity_type: "gym" | "course" | "practice" | "available";
+  location_name: string | null;
+  detail: string | null;
+  visibility: "friends" | "private";
+  started_at: string;
+  expires_at: string | null;
+  ended_at: string | null;
+  created_at: string;
+  updated_at?: string | null;
+};

@@ -12,6 +12,7 @@ import {
   PlusCircle,
   Target,
   Trophy,
+  Users,
   Zap,
 } from "lucide-react";
 import { Button, EmptyState, SectionTitle, StatusPill, Surface } from "@/components/ui";
@@ -38,6 +39,7 @@ import {
 } from "@/lib/insights";
 import type { Competition, ExerciseLog, OnboardingData, PracticeSession, Round, RoundHole, Workout } from "@/lib/types";
 import type { WellnessLog } from "@/lib/types";
+import type { LiveActivity } from "@/lib/types";
 
 export default function Dashboard() {
   const [, navigate] = useLocation();
@@ -48,6 +50,7 @@ export default function Dashboard() {
   const [practices, setPractices] = useState<PracticeSession[]>([]);
   const [competitions, setCompetitions] = useState<Competition[]>([]);
   const [wellnessLogs, setWellnessLogs] = useState<WellnessLog[]>([]);
+  const [liveActivities, setLiveActivities] = useState<LiveActivity[]>([]);
   const [sportMode, setSportMode] = useState<OnboardingData["mainSport"]>("both");
   const [loading, setLoading] = useState(true);
 
@@ -58,13 +61,14 @@ export default function Dashboard() {
 
   useEffect(() => {
     const load = async () => {
-      const [{ data: r }, { data: h }, { data: w }, { data: p }, { data: c }, { data: wellness }, { data: profile }] = await Promise.all([
+      const [{ data: r }, { data: h }, { data: w }, { data: p }, { data: c }, { data: wellness }, { data: live }, { data: profile }] = await Promise.all([
         supabase.from("rounds").select("*").order("created_at", { ascending: false }),
         supabase.from("round_holes").select("*").order("created_at", { ascending: false }),
         supabase.from("workouts").select("*").order("created_at", { ascending: false }),
         supabase.from("practice_sessions").select("*").order("created_at", { ascending: false }),
         supabase.from("competitions").select("*").eq("status", "upcoming").order("competition_date", { ascending: true }),
         supabase.from("daily_wellness_logs").select("*").order("log_date", { ascending: false }).limit(7),
+        supabase.from("live_activities").select("*").is("ended_at", null).order("started_at", { ascending: false }).limit(1),
         supabase.from("profiles").select("onboarding_data").maybeSingle(),
       ]);
       setRounds((r as Round[]) || []);
@@ -73,6 +77,7 @@ export default function Dashboard() {
       setPractices((p as PracticeSession[]) || []);
       setCompetitions((c as Competition[]) || []);
       setWellnessLogs((wellness as WellnessLog[]) || []);
+      setLiveActivities((live as LiveActivity[]) || []);
       setSportMode(((profile?.onboarding_data as OnboardingData | null)?.mainSport) || "both");
       setLoading(false);
     };
@@ -89,6 +94,7 @@ export default function Dashboard() {
   const nextCompetition = competitions[0] ?? null;
   const todayWellness = wellnessLogs.find((log) => log.log_date === new Date().toISOString().slice(0, 10)) || wellnessLogs[0] || null;
   const hydrationProgress = todayWellness?.water_litres ? Math.min((todayWellness.water_litres / 2.5) * 100, 100) : 0;
+  const liveActivity = liveActivities[0] || null;
   const trainingOnly = sportMode === "training";
   const golfStats = getGolfStats(rounds);
   const shortGameStats = getShortGameStats(roundHoles);
@@ -174,6 +180,19 @@ export default function Dashboard() {
               <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-steel/10">
                 <div className="h-full rounded-full bg-pulse" style={{ width: `${hydrationProgress}%` }} />
               </div>
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate("/social")}
+              className="min-h-[116px] rounded-xl border border-lab/20 bg-lab/8 p-4 text-left transition hover:border-lab/40"
+            >
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-muted">Live</p>
+              <p className="mt-3 text-lg font-semibold leading-snug text-dark">
+                {liveActivity ? getActivityLabel(liveActivity.activity_type) : "Offline"}
+              </p>
+              <p className="mt-2 text-sm text-muted">
+                {liveActivity?.location_name || "Check in with friends"}
+              </p>
             </button>
           </div>
           <div className="mt-3 rounded-xl border border-pulse/20 bg-pulse/8 p-4">
@@ -402,6 +421,7 @@ export default function Dashboard() {
             <Action href="/workouts/submit" icon={Dumbbell} title="Training" text="Performance console" tone="pulse" />
             <Action href="/workouts" icon={PlusCircle} title="Board" text="Plan the week" tone="lab" />
             <Action href="/wellness" icon={Droplets} title="Wellness" text="Hydration and recovery" tone="pulse" />
+            <Action href="/social" icon={Users} title="Social" text="Live check-ins" tone="pulse" />
             <Action href="/analytics" icon={ArrowUpRight} title="Report" text="Review trends" tone="dark" />
           </div>
         </Surface>
@@ -806,4 +826,11 @@ function getDaysUntil(value: string) {
   if (days === 0) return "today";
   if (days === 1) return "tomorrow";
   return `${days} days away`;
+}
+
+function getActivityLabel(activity: LiveActivity["activity_type"]) {
+  if (activity === "gym") return "At the gym";
+  if (activity === "course") return "On course";
+  if (activity === "practice") return "Practicing";
+  return "Available";
 }

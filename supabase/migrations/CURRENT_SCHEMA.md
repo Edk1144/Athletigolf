@@ -253,6 +253,57 @@ Security:
 - Row Level Security enabled.
 - Users can only access rows where `auth.uid() = user_id`.
 
+### `friend_connections`
+
+Purpose: friend requests and accepted friend relationships.
+
+Required columns:
+
+- `id uuid primary key`
+- `requester_id uuid default auth.uid()`
+- `receiver_id uuid`
+- `status text default 'pending'`
+- `created_at timestamptz`
+- `updated_at timestamptz`
+
+Recommended constraints/indexes:
+
+- Unique pair: `(requester_id, receiver_id)`
+- Index on `(requester_id, status)`
+- Index on `(receiver_id, status)`
+
+Security:
+
+- Row Level Security enabled.
+- Users can only access rows where they are the requester or receiver.
+
+### `live_activities`
+
+Purpose: current gym, course, practice, or availability check-ins.
+
+Required columns:
+
+- `id uuid primary key`
+- `user_id uuid default auth.uid()`
+- `activity_type text`
+- `location_name text`
+- `detail text`
+- `visibility text default 'friends'`
+- `started_at timestamptz`
+- `expires_at timestamptz`
+- `ended_at timestamptz`
+- `created_at timestamptz`
+- `updated_at timestamptz`
+
+Recommended index:
+
+- `(user_id, ended_at, expires_at)`
+
+Security:
+
+- Row Level Security enabled.
+- Users can only manage their own live activity rows in v1.
+
 ## Bolt Answer
 
 If Bolt asks what database work it needs, say:

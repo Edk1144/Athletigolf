@@ -10,6 +10,7 @@ import Onboarding from "@/pages/Onboarding";
 import Profile from "@/pages/Profile";
 import Analytics from "@/pages/Analytics";
 import Wellness from "@/pages/Wellness";
+import Social from "@/pages/Social";
 import RoundHistory from "@/pages/RoundHistory";
 import Competitions from "@/pages/Competitions";
 import ArchivedSplits from "@/pages/ArchivedSplits";
@@ -135,6 +136,12 @@ function AppShell() {
         <Route path="/wellness">
           <ProtectedRoute>
             <Wellness />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/social">
+          <ProtectedRoute>
+            <Social />
           </ProtectedRoute>
         </Route>
 
