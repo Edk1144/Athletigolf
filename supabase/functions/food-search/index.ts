@@ -12,6 +12,8 @@ type FoodSearchResult = {
   proteinPer100g: number | null;
   carbsPer100g: number | null;
   fatsPer100g: number | null;
+  saturatedFatsPer100g: number | null;
+  sugarsPer100g: number | null;
 };
 
 const corsHeaders = {
@@ -102,6 +104,8 @@ async function searchOpenFoodFacts(query: string) {
           proteinPer100g: toNumber(nutriments.proteins_100g),
           carbsPer100g: toNumber(nutriments.carbohydrates_100g),
           fatsPer100g: toNumber(nutriments.fat_100g),
+          saturatedFatsPer100g: toNumber(nutriments["saturated-fat_100g"]),
+          sugarsPer100g: toNumber(nutriments.sugars_100g),
         };
       })
       .filter(Boolean) as FoodSearchResult[],
@@ -149,6 +153,8 @@ async function searchUsda(query: string) {
         proteinPer100g: findNutrient(nutrients, ["Protein"]),
         carbsPer100g: findNutrient(nutrients, ["Carbohydrate, by difference", "Carbohydrate"]),
         fatsPer100g: findNutrient(nutrients, ["Total lipid (fat)", "Total fat"]),
+        saturatedFatsPer100g: findNutrient(nutrients, ["Fatty acids, total saturated", "Saturated fat"]),
+        sugarsPer100g: findNutrient(nutrients, ["Sugars, total including NLEA", "Total Sugars", "Sugars, total"]),
       };
     }),
   };

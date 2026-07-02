@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Activity, CalendarDays, Copy, Database, Droplets, Flame, Moon, Pencil, Plus, Scale, Search, Trash2, Utensils, Zap } from "lucide-react";
+import { Activity, CalendarDays, ChevronLeft, ChevronRight, Copy, Database, Flame, Moon, Pencil, Plus, Scale, Search, Trash2, Utensils, Zap } from "lucide-react";
 import { Button, EmptyState, FieldLabel, PageHeader, SelectInput, Surface, TextArea, TextInput } from "@/components/ui";
 import { supabase } from "@/lib/supabase";
 import type { FoodSearchResult, NutritionEntry, OnboardingData, SavedFood, WellnessLog } from "@/lib/types";
@@ -8,6 +8,11 @@ import { defaultWellnessTargets, getWellnessTargets, type WellnessTargets } from
 const todayIso = () => new Date().toISOString().slice(0, 10);
 const offsetIso = (days: number) => {
   const date = new Date();
+  date.setDate(date.getDate() + days);
+  return date.toISOString().slice(0, 10);
+};
+const shiftIso = (value: string, days: number) => {
+  const date = new Date(`${value}T00:00:00`);
   date.setDate(date.getDate() + days);
   return date.toISOString().slice(0, 10);
 };
@@ -33,6 +38,8 @@ const blankFoodForm = {
   protein_grams: "",
   carbs_grams: "",
   fats_grams: "",
+  saturated_fats_grams: "",
+  sugars_grams: "",
   source: "manual" as "manual" | "open_food_facts" | "usda",
   external_id: "",
   brand: "",
@@ -43,6 +50,8 @@ const blankFoodForm = {
   protein_per_100g: "",
   carbs_per_100g: "",
   fats_per_100g: "",
+  saturated_fats_per_100g: "",
+  sugars_per_100g: "",
 };
 
 const mealTypes: Array<{ value: NutritionEntry["meal_type"]; label: string }> = [
@@ -61,6 +70,8 @@ export default function Wellness() {
   const [form, setForm] = useState(blankForm);
   const [foodForm, setFoodForm] = useState(blankFoodForm);
   const [savedFoodForm, setSavedFoodForm] = useState(blankFoodForm);
+  const [activeMeal, setActiveMeal] = useState<NutritionEntry["meal_type"]>("breakfast");
+  const [quickCalories, setQuickCalories] = useState("");
   const [selectedSavedFood, setSelectedSavedFood] = useState("");
   const [copySourceDate, setCopySourceDate] = useState(offsetIso(-1));
   const [editingSavedFoodId, setEditingSavedFoodId] = useState("");
@@ -116,6 +127,19 @@ export default function Wellness() {
     setSelectedLog(log);
     setForm(formFromLog(log));
     setError("");
+  }
+
+  function setActiveNutritionDate(date: string) {
+    const existingLog = logs.find((log) => log.log_date === date) || null;
+    setSelectedLog(existingLog);
+    setForm((prev) => ({ ...(existingLog ? formFromLog(existingLog) : prev), log_date: date }));
+    setFoodSearchWarnings([]);
+    setError("");
+  }
+
+  function selectMeal(meal: NutritionEntry["meal_type"]) {
+    setActiveMeal(meal);
+    setFoodForm((prev) => ({ ...prev, meal_type: meal }));
   }
 
   function addWater(amount: number) {
@@ -200,6 +224,8 @@ export default function Wellness() {
       protein_grams: toInteger(foodForm.protein_grams) || 0,
       carbs_grams: toInteger(foodForm.carbs_grams) || 0,
       fats_grams: toInteger(foodForm.fats_grams) || 0,
+      saturated_fats_grams: toInteger(foodForm.saturated_fats_grams) || 0,
+      sugars_grams: toInteger(foodForm.sugars_grams) || 0,
       source: foodForm.source || "manual",
       external_id: foodForm.external_id || null,
       brand: foodForm.brand || null,
@@ -210,6 +236,8 @@ export default function Wellness() {
       protein_per_100g: toNumber(foodForm.protein_per_100g),
       carbs_per_100g: toNumber(foodForm.carbs_per_100g),
       fats_per_100g: toNumber(foodForm.fats_per_100g),
+      saturated_fats_per_100g: toNumber(foodForm.saturated_fats_per_100g),
+      sugars_per_100g: toNumber(foodForm.sugars_per_100g),
       updated_at: new Date().toISOString(),
     };
 
@@ -230,6 +258,8 @@ export default function Wellness() {
         protein_grams: payload.protein_grams,
         carbs_grams: payload.carbs_grams,
         fats_grams: payload.fats_grams,
+        saturated_fats_grams: payload.saturated_fats_grams,
+        sugars_grams: payload.sugars_grams,
         source: payload.source,
         external_id: payload.external_id,
         brand: payload.brand,
@@ -240,6 +270,8 @@ export default function Wellness() {
         protein_per_100g: payload.protein_per_100g,
         carbs_per_100g: payload.carbs_per_100g,
         fats_per_100g: payload.fats_per_100g,
+        saturated_fats_per_100g: payload.saturated_fats_per_100g,
+        sugars_per_100g: payload.sugars_per_100g,
         updated_at: new Date().toISOString(),
       });
     }
@@ -263,6 +295,46 @@ export default function Wellness() {
       return;
     }
 
+    await loadLogs();
+  }
+
+  async function addQuickCalories(event: React.FormEvent) {
+    event.preventDefault();
+    const calories = toInteger(quickCalories);
+    if (!calories || calories <= 0) return;
+
+    setSaving(true);
+    setError("");
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      setError("You need to be signed in to save nutrition entries.");
+      setSaving(false);
+      return;
+    }
+
+    const { error: entryError } = await supabase.from("nutrition_entries").insert({
+      user_id: user.id,
+      log_date: activeNutritionDate,
+      meal_type: activeMeal,
+      food_name: "Quick calories",
+      serving: "Manual calories only",
+      calories,
+      protein_grams: 0,
+      carbs_grams: 0,
+      fats_grams: 0,
+      saturated_fats_grams: 0,
+      sugars_grams: 0,
+      source: "manual",
+      updated_at: new Date().toISOString(),
+    });
+
+    setSaving(false);
+    if (entryError) {
+      setError(entryError.message);
+      return;
+    }
+
+    setQuickCalories("");
     await loadLogs();
   }
 
@@ -301,6 +373,8 @@ export default function Wellness() {
         protein_grams: entry.protein_grams || 0,
         carbs_grams: entry.carbs_grams || 0,
         fats_grams: entry.fats_grams || 0,
+        saturated_fats_grams: entry.saturated_fats_grams || 0,
+        sugars_grams: entry.sugars_grams || 0,
         source: entry.source || "manual",
         external_id: entry.external_id || null,
         brand: entry.brand || null,
@@ -311,6 +385,8 @@ export default function Wellness() {
         protein_per_100g: entry.protein_per_100g || null,
         carbs_per_100g: entry.carbs_per_100g || null,
         fats_per_100g: entry.fats_per_100g || null,
+        saturated_fats_per_100g: entry.saturated_fats_per_100g || null,
+        sugars_per_100g: entry.sugars_per_100g || null,
         updated_at: now,
       }))
     );
@@ -334,6 +410,8 @@ export default function Wellness() {
       protein_grams: toFormValue(food.protein_grams),
       carbs_grams: toFormValue(food.carbs_grams),
       fats_grams: toFormValue(food.fats_grams),
+      saturated_fats_grams: toFormValue(food.saturated_fats_grams),
+      sugars_grams: toFormValue(food.sugars_grams),
       source: food.source || "manual",
       external_id: food.external_id || "",
       brand: food.brand || "",
@@ -344,6 +422,8 @@ export default function Wellness() {
       protein_per_100g: toFormValue(food.protein_per_100g),
       carbs_per_100g: toFormValue(food.carbs_per_100g),
       fats_per_100g: toFormValue(food.fats_per_100g),
+      saturated_fats_per_100g: toFormValue(food.saturated_fats_per_100g),
+      sugars_per_100g: toFormValue(food.sugars_per_100g),
     });
   }
 
@@ -362,6 +442,8 @@ export default function Wellness() {
         protein_grams: toInteger(savedFoodForm.protein_grams) || 0,
         carbs_grams: toInteger(savedFoodForm.carbs_grams) || 0,
         fats_grams: toInteger(savedFoodForm.fats_grams) || 0,
+        saturated_fats_grams: toInteger(savedFoodForm.saturated_fats_grams) || 0,
+        sugars_grams: toInteger(savedFoodForm.sugars_grams) || 0,
         source: savedFoodForm.source || "manual",
         external_id: savedFoodForm.external_id || null,
         brand: savedFoodForm.brand || null,
@@ -372,6 +454,8 @@ export default function Wellness() {
         protein_per_100g: toNumber(savedFoodForm.protein_per_100g),
         carbs_per_100g: toNumber(savedFoodForm.carbs_per_100g),
         fats_per_100g: toNumber(savedFoodForm.fats_per_100g),
+        saturated_fats_per_100g: toNumber(savedFoodForm.saturated_fats_per_100g),
+        sugars_per_100g: toNumber(savedFoodForm.sugars_per_100g),
         updated_at: new Date().toISOString(),
       })
       .eq("id", editingSavedFoodId);
@@ -419,6 +503,8 @@ export default function Wellness() {
       protein_grams: toFormValue(food.protein_grams),
       carbs_grams: toFormValue(food.carbs_grams),
       fats_grams: toFormValue(food.fats_grams),
+      saturated_fats_grams: toFormValue(food.saturated_fats_grams),
+      sugars_grams: toFormValue(food.sugars_grams),
       source: food.source || "manual",
       external_id: food.external_id || "",
       brand: food.brand || "",
@@ -429,6 +515,8 @@ export default function Wellness() {
       protein_per_100g: toFormValue(food.protein_per_100g),
       carbs_per_100g: toFormValue(food.carbs_per_100g),
       fats_per_100g: toFormValue(food.fats_per_100g),
+      saturated_fats_per_100g: toFormValue(food.saturated_fats_per_100g),
+      sugars_per_100g: toFormValue(food.sugars_per_100g),
     }));
     setSelectedFoodResult(null);
   }
@@ -457,8 +545,10 @@ export default function Wellness() {
       return;
     }
 
-    setFoodSearchResults((data?.results as FoodSearchResult[]) || []);
-    setFoodSearchWarnings((data?.warnings as string[]) || []);
+    const results = (data?.results as FoodSearchResult[]) || [];
+    const warnings = (data?.warnings as string[]) || [];
+    setFoodSearchResults(results);
+    setFoodSearchWarnings(results.length > 0 ? [] : warnings);
   }
 
   function selectFoodResult(food: FoodSearchResult) {
@@ -473,6 +563,8 @@ export default function Wellness() {
       protein_grams: toFormValue(calculated.protein),
       carbs_grams: toFormValue(calculated.carbs),
       fats_grams: toFormValue(calculated.fats),
+      saturated_fats_grams: toFormValue(calculated.saturatedFats),
+      sugars_grams: toFormValue(calculated.sugars),
       source: food.source,
       external_id: food.id,
       brand: food.brand || "",
@@ -483,6 +575,8 @@ export default function Wellness() {
       protein_per_100g: toFormValue(food.proteinPer100g),
       carbs_per_100g: toFormValue(food.carbsPer100g),
       fats_per_100g: toFormValue(food.fatsPer100g),
+      saturated_fats_per_100g: toFormValue(food.saturatedFatsPer100g),
+      sugars_per_100g: toFormValue(food.sugarsPer100g),
     }));
   }
 
@@ -499,6 +593,8 @@ export default function Wellness() {
         protein_grams: toFormValue(calculated.protein),
         carbs_grams: toFormValue(calculated.carbs),
         fats_grams: toFormValue(calculated.fats),
+        saturated_fats_grams: toFormValue(calculated.saturatedFats),
+        sugars_grams: toFormValue(calculated.sugars),
       };
     });
   }
@@ -509,6 +605,10 @@ export default function Wellness() {
     () => nutritionEntries.filter((entry) => entry.log_date === activeNutritionDate),
     [nutritionEntries, activeNutritionDate]
   );
+  const activeMealEntries = useMemo(
+    () => activeEntries.filter((entry) => entry.meal_type === activeMeal),
+    [activeEntries, activeMeal]
+  );
   const availableNutritionDates = useMemo(
     () =>
       Array.from(new Set(nutritionEntries.map((entry) => entry.log_date)))
@@ -517,11 +617,15 @@ export default function Wellness() {
     [nutritionEntries, activeNutritionDate]
   );
   const nutritionTotals = useMemo(() => getNutritionTotals(activeEntries), [activeEntries]);
+  const calorieDelta = nutritionTotals.calories - targets.calories;
+  const nutrientTargets = useMemo(() => getNutrientTargets(targets), [targets]);
   const displayNutrition = {
     calories: nutritionTotals.calories || todayLog?.calories || null,
     protein: nutritionTotals.protein || todayLog?.protein_grams || null,
     carbs: nutritionTotals.carbs || todayLog?.carbs_grams || null,
     fats: nutritionTotals.fats || todayLog?.fats_grams || null,
+    saturatedFats: nutritionTotals.saturatedFats || null,
+    sugars: nutritionTotals.sugars || null,
   };
   const weekLogs = useMemo(() => logs.slice(0, 7), [logs]);
   const weekly = useMemo(() => getWeeklySummary(weekLogs), [weekLogs]);
@@ -541,9 +645,36 @@ export default function Wellness() {
     <main className="min-h-screen bg-cream px-4 py-5 text-ink md:px-8 md:py-7">
       <PageHeader
         eyebrow="Wellness"
-        title="Nutrition and hydration"
+        title="Nutrition and recovery"
         description="Track the daily recovery signals that explain training quality, practice energy, and performance consistency."
         tone="text-pulse"
+        actions={
+          <div className="flex items-center gap-2 rounded-xl border border-line bg-panel p-2 shadow-sm">
+            <button
+              type="button"
+              onClick={() => setActiveNutritionDate(shiftIso(activeNutritionDate, -1))}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-muted transition hover:bg-pulse/10 hover:text-pulse"
+              aria-label="Previous day"
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveNutritionDate(todayIso())}
+              className="min-w-[128px] rounded-lg bg-pulse/10 px-4 py-2 text-sm font-bold text-pulse transition hover:bg-pulse/15"
+            >
+              {activeNutritionDate === todayIso() ? "Today" : formatDate(activeNutritionDate)}
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveNutritionDate(shiftIso(activeNutritionDate, 1))}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-muted transition hover:bg-pulse/10 hover:text-pulse"
+              aria-label="Next day"
+            >
+              <ChevronRight className="h-5 w-5" />
+            </button>
+          </div>
+        }
       />
 
       <section className="mb-5 grid gap-5 xl:grid-cols-[1fr_1.2fr]">
@@ -569,57 +700,23 @@ export default function Wellness() {
               </div>
             </div>
           </div>
-          <div className="mt-6 grid gap-3 sm:grid-cols-4">
-            <DarkMetric label="Water" value={`${Math.round(getProgress(todayLog?.water_litres, targets.waterLitres))}%`} />
+          <div className="mt-6 grid gap-3 sm:grid-cols-3">
             <DarkMetric label="Protein" value={`${Math.round(getProgress(displayNutrition.protein, targets.proteinGrams))}%`} />
             <DarkMetric label="Calories" value={`${Math.round(getProgress(displayNutrition.calories, targets.calories))}%`} />
             <DarkMetric label="Sleep" value={`${Math.round(getProgress(todayLog?.sleep_hours, targets.sleepHours))}%`} />
           </div>
-          <div className="mt-5 grid gap-2 sm:grid-cols-4">
-            <QuickAddButton label="+250ml" onClick={() => addWater(0.25)} />
-            <QuickAddButton label="+500ml" onClick={() => addWater(0.5)} />
-            <QuickAddButton label="+1L" onClick={() => addWater(1)} />
+          <div className="mt-5 max-w-xs">
             <QuickAddButton label="Copy yesterday" onClick={() => copyMealsFromDate(offsetIso(-1))} icon={Copy} />
-          </div>
-          <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]">
-            <input
-              value={customWaterMl}
-              onChange={(event) => setCustomWaterMl(event.target.value)}
-              type="number"
-              min="0"
-              placeholder="Custom water ml"
-              className="rounded-lg border border-white/10 bg-white/10 px-3 py-2 text-sm text-white outline-none placeholder:text-white/40 focus:border-pulse"
-            />
-            <Button type="button" variant="secondary" onClick={addCustomWater} className="border-white/15 bg-white/10 text-white hover:bg-white/15">
-              Add Water
-            </Button>
           </div>
         </Surface>
 
         <Surface>
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <WellnessTile icon={Droplets} label="Water" value={formatLitres(todayLog?.water_litres)} target={`${targets.waterLitres} L`} progress={getProgress(todayLog?.water_litres, targets.waterLitres)} tone="pulse" />
-            <WellnessTile icon={Utensils} label="Protein" value={formatGrams(displayNutrition.protein)} target={`${targets.proteinGrams} g`} progress={getProgress(displayNutrition.protein, targets.proteinGrams)} tone="golf" />
-            <WellnessTile icon={Flame} label="Calories" value={formatNumber(displayNutrition.calories)} target={`${targets.calories}`} progress={getProgress(displayNutrition.calories, targets.calories)} tone="gold" />
-            <WellnessTile icon={Moon} label="Sleep" value={formatHours(todayLog?.sleep_hours)} target={`${targets.sleepHours} h`} progress={getProgress(todayLog?.sleep_hours, targets.sleepHours)} tone="lab" />
-          </div>
-          <div className="mt-5 rounded-xl border border-line bg-white/55 p-4">
-            <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-              <div>
-                <p className="text-xs font-bold uppercase tracking-[0.16em] text-muted">Nutrition Target</p>
-                <h3 className="mt-1 text-lg font-semibold text-dark">{nutritionStatus.title}</h3>
-              </div>
-              <span className={`w-fit rounded-full px-3 py-1 text-xs font-bold ${nutritionStatus.badgeClass}`}>
-                {nutritionStatus.badge}
-              </span>
-            </div>
-            <p className="text-sm leading-relaxed text-muted">{nutritionStatus.detail}</p>
-            <div className="mt-4 grid gap-2 sm:grid-cols-3">
-              {nutritionStatus.rows.map((row) => (
-                <NutritionTargetMini key={row.label} {...row} />
-              ))}
-            </div>
-          </div>
+          <NutritionDashboard
+            nutrition={displayNutrition}
+            targets={nutrientTargets}
+            calorieDelta={calorieDelta}
+            status={nutritionStatus}
+          />
         </Surface>
       </section>
 
@@ -636,7 +733,7 @@ export default function Wellness() {
           </div>
 
           <form onSubmit={saveLog} className="grid gap-4">
-            <Field label="Date" type="date" value={form.log_date} onChange={(value) => setForm((prev) => ({ ...prev, log_date: value }))} required />
+            <Field label="Date" type="date" value={form.log_date} onChange={setActiveNutritionDate} required />
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <Field label="Water (litres)" type="number" step="0.1" value={form.water_litres} onChange={(value) => setForm((prev) => ({ ...prev, water_litres: value }))} placeholder={`${targets.waterLitres}`} />
@@ -686,13 +783,37 @@ export default function Wellness() {
                 <Utensils className="h-5 w-5 text-golf" />
                 <div>
                   <h2 className="text-xl font-semibold text-dark">Meals</h2>
-                  <p className="mt-1 text-sm text-muted">Log today, reuse yesterday, or build saved foods.</p>
+                  <p className="mt-1 text-sm text-muted">
+                    Choose a meal, add food from the database, or just log calories.
+                  </p>
                 </div>
               </div>
               <Button type="button" variant="secondary" onClick={() => copyMealsFromDate(copySourceDate)} disabled={saving}>
                 <Copy className="h-4 w-4" />
                 Copy Day
               </Button>
+            </div>
+
+            <div className="mb-5 grid gap-2 sm:grid-cols-4">
+              {mealTypes.map((meal) => {
+                const totals = getNutritionTotals(activeEntries.filter((entry) => entry.meal_type === meal.value));
+                return (
+                  <button
+                    key={meal.value}
+                    type="button"
+                    onClick={() => selectMeal(meal.value)}
+                    className={`rounded-xl border p-4 text-left transition ${
+                      activeMeal === meal.value
+                        ? "border-pulse bg-pulse/10 text-dark"
+                        : "border-line bg-white/70 text-muted hover:border-pulse/40 hover:text-dark"
+                    }`}
+                  >
+                    <span className="block text-sm font-semibold">{meal.label}</span>
+                    <span className="mt-2 block text-xl font-semibold text-dark">{totals.calories} kcal</span>
+                    <span className="mt-1 block text-xs text-muted">{activeEntries.filter((entry) => entry.meal_type === meal.value).length} item{activeEntries.filter((entry) => entry.meal_type === meal.value).length === 1 ? "" : "s"}</span>
+                  </button>
+                );
+              })}
             </div>
 
             <div className="mb-5 rounded-xl border border-line bg-white/55 p-3">
@@ -722,6 +843,25 @@ export default function Wellness() {
               </div>
             </div>
 
+            <form onSubmit={addQuickCalories} className="mb-5 rounded-xl border border-gold/25 bg-gold/10 p-4">
+              <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
+                <div>
+                  <FieldLabel>Add calories to {formatMealLabel(activeMeal)}</FieldLabel>
+                  <TextInput
+                    type="number"
+                    min="0"
+                    value={quickCalories}
+                    onChange={(event) => setQuickCalories(event.target.value)}
+                    placeholder="e.g. 250"
+                  />
+                </div>
+                <Button type="submit" variant="gold" disabled={saving || !quickCalories}>
+                  <Plus className="h-4 w-4" />
+                  Add Calories
+                </Button>
+              </div>
+            </form>
+
             <form onSubmit={searchFoods} className="mb-5 rounded-xl border border-pulse/20 bg-pulse/8 p-4">
               <div className="mb-4 flex items-center gap-3">
                 <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-pulse/10 text-pulse">
@@ -732,6 +872,10 @@ export default function Wellness() {
                   <h3 className="font-semibold text-dark">Search USDA and Open Food Facts</h3>
                 </div>
               </div>
+              <p className="mb-4 text-sm leading-relaxed text-muted">
+                Food results are sourced estimates. USDA entries use FoodData Central, U.S. Department of Agriculture,
+                Agricultural Research Service, fdc.nal.usda.gov. Check serving sizes and edit macros before saving.
+              </p>
               <div className="grid gap-3 md:grid-cols-[1fr_180px_auto] md:items-end">
                 <Field label="Food search" value={foodSearchQuery} onChange={setFoodSearchQuery} placeholder="Chicken breast, banana, Weetabix..." />
                 <div>
@@ -804,7 +948,7 @@ export default function Wellness() {
               <div className="grid gap-3 md:grid-cols-2">
                 <div>
                   <FieldLabel>Meal</FieldLabel>
-                  <SelectInput value={foodForm.meal_type} onChange={(event) => setFoodForm((prev) => ({ ...prev, meal_type: event.target.value as NutritionEntry["meal_type"] }))}>
+                  <SelectInput value={foodForm.meal_type} onChange={(event) => selectMeal(event.target.value as NutritionEntry["meal_type"])}>
                     {mealTypes.map((meal) => (
                       <option key={meal.value} value={meal.value}>{meal.label}</option>
                     ))}
@@ -817,6 +961,8 @@ export default function Wellness() {
                 <FoodField label="Protein (g)" type="number" value={foodForm.protein_grams} onChange={(value) => setFoodForm((prev) => ({ ...prev, protein_grams: value }))} placeholder="38" />
                 <FoodField label="Carbs (g)" type="number" value={foodForm.carbs_grams} onChange={(value) => setFoodForm((prev) => ({ ...prev, carbs_grams: value }))} placeholder="55" />
                 <FoodField label="Fats (g)" type="number" value={foodForm.fats_grams} onChange={(value) => setFoodForm((prev) => ({ ...prev, fats_grams: value }))} placeholder="14" />
+                <FoodField label="Saturated fat (g)" type="number" value={foodForm.saturated_fats_grams} onChange={(value) => setFoodForm((prev) => ({ ...prev, saturated_fats_grams: value }))} placeholder="5" />
+                <FoodField label="Sugars (g)" type="number" value={foodForm.sugars_grams} onChange={(value) => setFoodForm((prev) => ({ ...prev, sugars_grams: value }))} placeholder="12" />
               </div>
               {foodForm.source !== "manual" && (
                 <div className="rounded-lg border border-pulse/20 bg-pulse/8 p-3 text-sm text-muted">
@@ -901,16 +1047,11 @@ export default function Wellness() {
               </div>
             )}
 
-            <div className="space-y-4">
-              {mealTypes.map((meal) => (
-                <MealGroup
-                  key={meal.value}
-                  meal={meal}
-                  entries={activeEntries.filter((entry) => entry.meal_type === meal.value)}
-                  onDelete={deleteFoodEntry}
-                />
-              ))}
-            </div>
+            <MealGroup
+              meal={mealTypes.find((meal) => meal.value === activeMeal) || mealTypes[0]}
+              entries={activeMealEntries}
+              onDelete={deleteFoodEntry}
+            />
           </Surface>
 
           <Surface>
@@ -1047,6 +1188,140 @@ function WellnessTile({
       <h2 className="mt-2 text-3xl font-semibold text-dark">{value}</h2>
       <div className="mt-4 h-2 overflow-hidden rounded-full bg-steel/10">
         <div className={`h-full rounded-full ${bar}`} style={{ width: `${progress}%` }} />
+      </div>
+    </div>
+  );
+}
+
+type NutritionDetail = {
+  calories: number | null;
+  protein: number | null;
+  carbs: number | null;
+  fats: number | null;
+  saturatedFats: number | null;
+  sugars: number | null;
+};
+
+function NutritionDashboard({
+  nutrition,
+  targets,
+  calorieDelta,
+  status,
+}: {
+  nutrition: NutritionDetail;
+  targets: ReturnType<typeof getNutrientTargets>;
+  calorieDelta: number;
+  status: ReturnType<typeof buildNutritionStatus>;
+}) {
+  const rows = [
+    { label: "Protein", value: nutrition.protein, target: targets.protein, unit: "g", tone: "bg-golf" },
+    { label: "Carbs", value: nutrition.carbs, target: targets.carbs, unit: "g", tone: "bg-pulse" },
+    { label: "Fats", value: nutrition.fats, target: targets.fats, unit: "g", tone: "bg-gold" },
+    { label: "Saturated fat", value: nutrition.saturatedFats, target: targets.saturatedFats, unit: "g", tone: "bg-danger" },
+    { label: "Sugars", value: nutrition.sugars, target: targets.sugars, unit: "g", tone: "bg-lab" },
+  ];
+
+  return (
+    <div>
+      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.16em] text-muted">Nutrition Target</p>
+          <h2 className="mt-1 text-xl font-semibold text-dark">{status.title}</h2>
+          <p className="mt-2 text-sm leading-relaxed text-muted">{status.detail}</p>
+        </div>
+        <span className={`w-fit rounded-full px-3 py-1 text-xs font-bold ${status.badgeClass}`}>
+          {status.badge}
+        </span>
+      </div>
+
+      <div className="grid gap-5 lg:grid-cols-[220px_1fr] lg:items-center">
+        <MacroPie nutrition={nutrition} />
+        <div className="space-y-3">
+          <CalorieBalanceBar calories={nutrition.calories || 0} target={targets.calories} delta={calorieDelta} />
+          {rows.map((row) => (
+            <MacroDetailRow key={row.label} {...row} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MacroPie({ nutrition }: { nutrition: NutritionDetail }) {
+  const proteinCalories = (nutrition.protein || 0) * 4;
+  const carbCalories = (nutrition.carbs || 0) * 4;
+  const fatCalories = (nutrition.fats || 0) * 9;
+  const total = proteinCalories + carbCalories + fatCalories;
+  const proteinShare = total ? (proteinCalories / total) * 100 : 0;
+  const carbShare = total ? (carbCalories / total) * 100 : 0;
+  const fatShare = total ? (fatCalories / total) * 100 : 0;
+  const gradient =
+    total === 0
+      ? "conic-gradient(rgb(226 232 240) 0 100%)"
+      : `conic-gradient(rgb(22 163 74) 0 ${proteinShare}%, rgb(0 180 216) ${proteinShare}% ${proteinShare + carbShare}%, rgb(212 175 55) ${proteinShare + carbShare}% 100%)`;
+
+  return (
+    <div className="flex flex-col items-center rounded-xl border border-line bg-white/70 p-4 text-center">
+      <div className="relative h-44 w-44 rounded-full" style={{ background: gradient }}>
+        <div className="absolute inset-6 flex flex-col items-center justify-center rounded-full bg-panel">
+          <span className="text-xs font-bold uppercase tracking-[0.14em] text-muted">Calories</span>
+          <span className="mt-1 text-3xl font-semibold text-dark">{formatNumber(nutrition.calories)}</span>
+        </div>
+      </div>
+      <div className="mt-4 grid w-full grid-cols-3 gap-2 text-xs font-semibold text-muted">
+        <span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-golf" />P {Math.round(proteinShare)}%</span>
+        <span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-pulse" />C {Math.round(carbShare)}%</span>
+        <span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-gold" />F {Math.round(fatShare)}%</span>
+      </div>
+    </div>
+  );
+}
+
+function CalorieBalanceBar({ calories, target, delta }: { calories: number; target: number; delta: number }) {
+  const progress = getProgress(calories, target);
+  const over = delta > 0;
+  return (
+    <div className="rounded-xl border border-line bg-white/70 p-4">
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-dark">Calorie balance</p>
+          <p className="mt-1 text-xs text-muted">
+            {over ? `${Math.round(delta)} over target` : `${Math.abs(Math.round(delta))} under target`}
+          </p>
+        </div>
+        <p className="text-sm font-semibold text-dark">{Math.round(calories)} / {target}</p>
+      </div>
+      <div className="h-3 overflow-hidden rounded-full bg-steel/10">
+        <div className={`h-full rounded-full ${over ? "bg-danger" : "bg-gold"}`} style={{ width: `${progress}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function MacroDetailRow({
+  label,
+  value,
+  target,
+  unit,
+  tone,
+}: {
+  label: string;
+  value: number | null | undefined;
+  target: number;
+  unit: string;
+  tone: string;
+}) {
+  const progress = getProgress(value, target);
+  return (
+    <div>
+      <div className="mb-1 flex items-center justify-between gap-3">
+        <p className="text-sm font-medium text-muted">{label}</p>
+        <p className="text-sm font-semibold text-dark">
+          {value === null || value === undefined ? "-" : `${Math.round(value)}${unit}`} / {target}{unit}
+        </p>
+      </div>
+      <div className="h-2 overflow-hidden rounded-full bg-steel/10">
+        <div className={`h-full rounded-full ${tone}`} style={{ width: `${progress}%` }} />
       </div>
     </div>
   );
@@ -1319,9 +1594,22 @@ function getNutritionTotals(entries: NutritionEntry[]) {
       protein: totals.protein + (entry.protein_grams || 0),
       carbs: totals.carbs + (entry.carbs_grams || 0),
       fats: totals.fats + (entry.fats_grams || 0),
+      saturatedFats: totals.saturatedFats + (entry.saturated_fats_grams || 0),
+      sugars: totals.sugars + (entry.sugars_grams || 0),
     }),
-    { calories: 0, protein: 0, carbs: 0, fats: 0 }
+    { calories: 0, protein: 0, carbs: 0, fats: 0, saturatedFats: 0, sugars: 0 }
   );
+}
+
+function getNutrientTargets(targets: WellnessTargets) {
+  return {
+    calories: targets.calories,
+    protein: targets.proteinGrams,
+    carbs: Math.round((targets.calories * 0.48) / 4),
+    fats: Math.round((targets.calories * 0.25) / 9),
+    saturatedFats: Math.round((targets.calories * 0.1) / 9),
+    sugars: Math.round((targets.calories * 0.1) / 4),
+  };
 }
 
 function getDailyCompletion(log: WellnessLog | null | undefined, targets: WellnessTargets) {
@@ -1511,6 +1799,8 @@ function calculateMacros(food: FoodSearchResult, grams: number) {
     protein: roundMacro(food.proteinPer100g, multiplier),
     carbs: roundMacro(food.carbsPer100g, multiplier),
     fats: roundMacro(food.fatsPer100g, multiplier),
+    saturatedFats: roundMacro(food.saturatedFatsPer100g, multiplier),
+    sugars: roundMacro(food.sugarsPer100g, multiplier),
   };
 }
 
@@ -1528,6 +1818,8 @@ function foodResultFromForm(form: typeof blankFoodForm): FoodSearchResult | null
     proteinPer100g: toNumber(form.protein_per_100g),
     carbsPer100g: toNumber(form.carbs_per_100g),
     fatsPer100g: toNumber(form.fats_per_100g),
+    saturatedFatsPer100g: toNumber(form.saturated_fats_per_100g),
+    sugarsPer100g: toNumber(form.sugars_per_100g),
   };
 }
 

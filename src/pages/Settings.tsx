@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
-import { Copy, Mail, ShieldCheck } from "lucide-react";
+import { Copy, Database, Mail, ShieldCheck } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { sportModeLabels, type SportMode } from "@/lib/sportMode";
 import { applyTheme, type AppTheme } from "@/lib/theme";
@@ -359,6 +359,58 @@ export default function Settings() {
                 {profile.notifications_enabled ? "Notifications on" : "Notifications off"}
               </span>
             </label>
+          </div>
+
+          {/* NUTRITION DATA POLICY */}
+          <div className="rounded-xl border border-line bg-panel p-6 shadow-sm">
+            <div className="mb-6 flex items-start gap-3">
+              <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-pulse/10 text-pulse">
+                <Database className="h-5 w-5" />
+              </span>
+              <div>
+                <h2 className="text-2xl font-semibold text-dark">Nutrition Data Policy</h2>
+                <p className="mt-2 text-muted">
+                  How AthletiGolf uses USDA FoodData Central data, citation, estimates and source transparency.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <PrivacyNote
+                title="Public domain data"
+                detail="USDA FoodData Central data are public domain, not copyrighted and published under CC0, so no formal permission is required for use."
+              />
+              <PrivacyNote
+                title="Citation and acknowledgment"
+                detail="AthletiGolf labels USDA-sourced entries and acknowledges FoodData Central as the nutrition data source wherever USDA data is used."
+              />
+              <PrivacyNote
+                title="Source transparency"
+                detail="USDA entries keep their source and external food ID where available, so imported foods remain traceable back to FoodData Central."
+              />
+              <PrivacyNote
+                title="API responsibility"
+                detail="AthletiGolf keeps the USDA API key server-side, follows normal rate-limit expectations and does not expose the key in the app."
+              />
+              <div className="rounded-xl border border-line bg-white/70 p-4 md:col-span-2">
+                <p className="text-xs font-bold uppercase tracking-[0.16em] text-muted">USDA source notice</p>
+                <p className="mt-2 text-sm leading-relaxed text-muted">
+                  Nutrition data may include information from U.S. Department of Agriculture, Agricultural Research
+                  Service, Beltsville Human Nutrition Research Center. FoodData Central. Available from
+                  https://fdc.nal.usda.gov/. AthletiGolf uses USDA data for personal tracking and analysis only.
+                  Values remain estimates and may vary by brand, serving size, preparation method, formulation changes
+                  and user edits.
+                </p>
+              </div>
+              <div className="rounded-xl border border-line bg-white/70 p-4 md:col-span-2">
+                <p className="text-xs font-bold uppercase tracking-[0.16em] text-muted">Accuracy and claims</p>
+                <p className="mt-2 text-sm leading-relaxed text-muted">
+                  AthletiGolf does not present USDA values as medical advice, FDA approval, a nutrition label, or a
+                  guarantee of exact intake. Users should check product labels and adjust entries before relying on
+                  saved meals.
+                </p>
+              </div>
+            </div>
           </div>
 
           {/* PRIVACY */}
