@@ -214,6 +214,16 @@ export type NutritionEntry = {
   protein_grams: number | null;
   carbs_grams: number | null;
   fats_grams: number | null;
+  source?: "manual" | "open_food_facts" | "usda" | null;
+  external_id?: string | null;
+  brand?: string | null;
+  barcode?: string | null;
+  serving_grams?: number | null;
+  serving_label?: string | null;
+  calories_per_100g?: number | null;
+  protein_per_100g?: number | null;
+  carbs_per_100g?: number | null;
+  fats_per_100g?: number | null;
   created_at: string;
   updated_at?: string | null;
 };
@@ -227,8 +237,32 @@ export type SavedFood = {
   protein_grams: number | null;
   carbs_grams: number | null;
   fats_grams: number | null;
+  source?: "manual" | "open_food_facts" | "usda" | null;
+  external_id?: string | null;
+  brand?: string | null;
+  barcode?: string | null;
+  serving_grams?: number | null;
+  serving_label?: string | null;
+  calories_per_100g?: number | null;
+  protein_per_100g?: number | null;
+  carbs_per_100g?: number | null;
+  fats_per_100g?: number | null;
   created_at: string;
   updated_at?: string | null;
+};
+
+export type FoodSearchResult = {
+  id: string;
+  source: "open_food_facts" | "usda";
+  name: string;
+  brand: string | null;
+  barcode: string | null;
+  servingLabel: string | null;
+  servingGrams: number | null;
+  caloriesPer100g: number | null;
+  proteinPer100g: number | null;
+  carbsPer100g: number | null;
+  fatsPer100g: number | null;
 };
 
 export type FriendConnection = {

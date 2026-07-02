@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { Activity, CalendarDays, Copy, Droplets, Flame, Moon, Pencil, Plus, Scale, Trash2, Utensils, Zap } from "lucide-react";
+import { Activity, CalendarDays, Copy, Database, Droplets, Flame, Moon, Pencil, Plus, Scale, Search, Trash2, Utensils, Zap } from "lucide-react";
 import { Button, EmptyState, FieldLabel, PageHeader, SelectInput, Surface, TextArea, TextInput } from "@/components/ui";
 import { supabase } from "@/lib/supabase";
-import type { NutritionEntry, OnboardingData, SavedFood, WellnessLog } from "@/lib/types";
+import type { FoodSearchResult, NutritionEntry, OnboardingData, SavedFood, WellnessLog } from "@/lib/types";
 import { defaultWellnessTargets, getWellnessTargets, type WellnessTargets } from "@/lib/wellnessTargets";
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
@@ -33,6 +33,16 @@ const blankFoodForm = {
   protein_grams: "",
   carbs_grams: "",
   fats_grams: "",
+  source: "manual" as "manual" | "open_food_facts" | "usda",
+  external_id: "",
+  brand: "",
+  barcode: "",
+  serving_grams: "",
+  serving_label: "",
+  calories_per_100g: "",
+  protein_per_100g: "",
+  carbs_per_100g: "",
+  fats_per_100g: "",
 };
 
 const mealTypes: Array<{ value: NutritionEntry["meal_type"]; label: string }> = [
@@ -55,6 +65,13 @@ export default function Wellness() {
   const [copySourceDate, setCopySourceDate] = useState(offsetIso(-1));
   const [editingSavedFoodId, setEditingSavedFoodId] = useState("");
   const [saveAsPreset, setSaveAsPreset] = useState(false);
+  const [foodSearchQuery, setFoodSearchQuery] = useState("");
+  const [foodSearchSource, setFoodSearchSource] = useState<"all" | "open_food_facts" | "usda">("all");
+  const [foodSearchResults, setFoodSearchResults] = useState<FoodSearchResult[]>([]);
+  const [selectedFoodResult, setSelectedFoodResult] = useState<FoodSearchResult | null>(null);
+  const [foodSearchWarnings, setFoodSearchWarnings] = useState<string[]>([]);
+  const [searchingFoods, setSearchingFoods] = useState(false);
+  const [customWaterMl, setCustomWaterMl] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -110,6 +127,13 @@ export default function Wellness() {
         water_litres: Number(current + amount).toFixed(1),
       };
     });
+  }
+
+  function addCustomWater() {
+    const amountMl = toNumber(customWaterMl);
+    if (!amountMl || amountMl <= 0) return;
+    addWater(amountMl / 1000);
+    setCustomWaterMl("");
   }
 
   async function saveLog(event: React.FormEvent) {
@@ -176,6 +200,16 @@ export default function Wellness() {
       protein_grams: toInteger(foodForm.protein_grams) || 0,
       carbs_grams: toInteger(foodForm.carbs_grams) || 0,
       fats_grams: toInteger(foodForm.fats_grams) || 0,
+      source: foodForm.source || "manual",
+      external_id: foodForm.external_id || null,
+      brand: foodForm.brand || null,
+      barcode: foodForm.barcode || null,
+      serving_grams: toNumber(foodForm.serving_grams),
+      serving_label: foodForm.serving_label || null,
+      calories_per_100g: toNumber(foodForm.calories_per_100g),
+      protein_per_100g: toNumber(foodForm.protein_per_100g),
+      carbs_per_100g: toNumber(foodForm.carbs_per_100g),
+      fats_per_100g: toNumber(foodForm.fats_per_100g),
       updated_at: new Date().toISOString(),
     };
 
@@ -196,12 +230,23 @@ export default function Wellness() {
         protein_grams: payload.protein_grams,
         carbs_grams: payload.carbs_grams,
         fats_grams: payload.fats_grams,
+        source: payload.source,
+        external_id: payload.external_id,
+        brand: payload.brand,
+        barcode: payload.barcode,
+        serving_grams: payload.serving_grams,
+        serving_label: payload.serving_label,
+        calories_per_100g: payload.calories_per_100g,
+        protein_per_100g: payload.protein_per_100g,
+        carbs_per_100g: payload.carbs_per_100g,
+        fats_per_100g: payload.fats_per_100g,
         updated_at: new Date().toISOString(),
       });
     }
 
     setFoodForm((prev) => ({ ...blankFoodForm, meal_type: prev.meal_type }));
     setSelectedSavedFood("");
+    setSelectedFoodResult(null);
     setSaveAsPreset(false);
     setSaving(false);
     await loadLogs();
@@ -256,6 +301,16 @@ export default function Wellness() {
         protein_grams: entry.protein_grams || 0,
         carbs_grams: entry.carbs_grams || 0,
         fats_grams: entry.fats_grams || 0,
+        source: entry.source || "manual",
+        external_id: entry.external_id || null,
+        brand: entry.brand || null,
+        barcode: entry.barcode || null,
+        serving_grams: entry.serving_grams || null,
+        serving_label: entry.serving_label || null,
+        calories_per_100g: entry.calories_per_100g || null,
+        protein_per_100g: entry.protein_per_100g || null,
+        carbs_per_100g: entry.carbs_per_100g || null,
+        fats_per_100g: entry.fats_per_100g || null,
         updated_at: now,
       }))
     );
@@ -279,6 +334,16 @@ export default function Wellness() {
       protein_grams: toFormValue(food.protein_grams),
       carbs_grams: toFormValue(food.carbs_grams),
       fats_grams: toFormValue(food.fats_grams),
+      source: food.source || "manual",
+      external_id: food.external_id || "",
+      brand: food.brand || "",
+      barcode: food.barcode || "",
+      serving_grams: toFormValue(food.serving_grams),
+      serving_label: food.serving_label || "",
+      calories_per_100g: toFormValue(food.calories_per_100g),
+      protein_per_100g: toFormValue(food.protein_per_100g),
+      carbs_per_100g: toFormValue(food.carbs_per_100g),
+      fats_per_100g: toFormValue(food.fats_per_100g),
     });
   }
 
@@ -297,6 +362,16 @@ export default function Wellness() {
         protein_grams: toInteger(savedFoodForm.protein_grams) || 0,
         carbs_grams: toInteger(savedFoodForm.carbs_grams) || 0,
         fats_grams: toInteger(savedFoodForm.fats_grams) || 0,
+        source: savedFoodForm.source || "manual",
+        external_id: savedFoodForm.external_id || null,
+        brand: savedFoodForm.brand || null,
+        barcode: savedFoodForm.barcode || null,
+        serving_grams: toNumber(savedFoodForm.serving_grams),
+        serving_label: savedFoodForm.serving_label || null,
+        calories_per_100g: toNumber(savedFoodForm.calories_per_100g),
+        protein_per_100g: toNumber(savedFoodForm.protein_per_100g),
+        carbs_per_100g: toNumber(savedFoodForm.carbs_per_100g),
+        fats_per_100g: toNumber(savedFoodForm.fats_per_100g),
         updated_at: new Date().toISOString(),
       })
       .eq("id", editingSavedFoodId);
@@ -344,7 +419,88 @@ export default function Wellness() {
       protein_grams: toFormValue(food.protein_grams),
       carbs_grams: toFormValue(food.carbs_grams),
       fats_grams: toFormValue(food.fats_grams),
+      source: food.source || "manual",
+      external_id: food.external_id || "",
+      brand: food.brand || "",
+      barcode: food.barcode || "",
+      serving_grams: toFormValue(food.serving_grams),
+      serving_label: food.serving_label || "",
+      calories_per_100g: toFormValue(food.calories_per_100g),
+      protein_per_100g: toFormValue(food.protein_per_100g),
+      carbs_per_100g: toFormValue(food.carbs_per_100g),
+      fats_per_100g: toFormValue(food.fats_per_100g),
     }));
+    setSelectedFoodResult(null);
+  }
+
+  async function searchFoods(event: React.FormEvent) {
+    event.preventDefault();
+    if (foodSearchQuery.trim().length < 2) {
+      setFoodSearchWarnings(["Search needs at least 2 characters."]);
+      return;
+    }
+
+    setSearchingFoods(true);
+    setFoodSearchWarnings([]);
+    setError("");
+    const { data, error: searchError } = await supabase.functions.invoke("food-search", {
+      body: {
+        query: foodSearchQuery.trim(),
+        source: foodSearchSource,
+      },
+    });
+    setSearchingFoods(false);
+
+    if (searchError) {
+      setFoodSearchResults([]);
+      setFoodSearchWarnings([searchError.message || "Food search is not available yet."]);
+      return;
+    }
+
+    setFoodSearchResults((data?.results as FoodSearchResult[]) || []);
+    setFoodSearchWarnings((data?.warnings as string[]) || []);
+  }
+
+  function selectFoodResult(food: FoodSearchResult) {
+    setSelectedFoodResult(food);
+    const servingGrams = food.servingGrams || 100;
+    const calculated = calculateMacros(food, servingGrams);
+    setFoodForm((prev) => ({
+      ...prev,
+      food_name: food.name,
+      serving: food.servingLabel || `${servingGrams}g`,
+      calories: toFormValue(calculated.calories),
+      protein_grams: toFormValue(calculated.protein),
+      carbs_grams: toFormValue(calculated.carbs),
+      fats_grams: toFormValue(calculated.fats),
+      source: food.source,
+      external_id: food.id,
+      brand: food.brand || "",
+      barcode: food.barcode || "",
+      serving_grams: toFormValue(servingGrams),
+      serving_label: food.servingLabel || "",
+      calories_per_100g: toFormValue(food.caloriesPer100g),
+      protein_per_100g: toFormValue(food.proteinPer100g),
+      carbs_per_100g: toFormValue(food.carbsPer100g),
+      fats_per_100g: toFormValue(food.fatsPer100g),
+    }));
+  }
+
+  function updateServingGrams(value: string) {
+    setFoodForm((prev) => {
+      const grams = toNumber(value);
+      const next = { ...prev, serving_grams: value, serving: grams ? `${grams}g` : prev.serving };
+      const food = selectedFoodResult || foodResultFromForm(next);
+      if (!food || !grams) return next;
+      const calculated = calculateMacros(food, grams);
+      return {
+        ...next,
+        calories: toFormValue(calculated.calories),
+        protein_grams: toFormValue(calculated.protein),
+        carbs_grams: toFormValue(calculated.carbs),
+        fats_grams: toFormValue(calculated.fats),
+      };
+    });
   }
 
   const todayLog = logs.find((log) => log.log_date === todayIso()) || selectedLog;
@@ -425,6 +581,19 @@ export default function Wellness() {
             <QuickAddButton label="+1L" onClick={() => addWater(1)} />
             <QuickAddButton label="Copy yesterday" onClick={() => copyMealsFromDate(offsetIso(-1))} icon={Copy} />
           </div>
+          <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]">
+            <input
+              value={customWaterMl}
+              onChange={(event) => setCustomWaterMl(event.target.value)}
+              type="number"
+              min="0"
+              placeholder="Custom water ml"
+              className="rounded-lg border border-white/10 bg-white/10 px-3 py-2 text-sm text-white outline-none placeholder:text-white/40 focus:border-pulse"
+            />
+            <Button type="button" variant="secondary" onClick={addCustomWater} className="border-white/15 bg-white/10 text-white hover:bg-white/15">
+              Add Water
+            </Button>
+          </div>
         </Surface>
 
         <Surface>
@@ -475,6 +644,12 @@ export default function Wellness() {
                   <QuickAddButton label="+250ml" onClick={() => addWater(0.25)} />
                   <QuickAddButton label="+500ml" onClick={() => addWater(0.5)} />
                   <QuickAddButton label="+1L" onClick={() => addWater(1)} />
+                </div>
+                <div className="mt-2 grid grid-cols-[1fr_auto] gap-2">
+                  <TextInput value={customWaterMl} onChange={(event) => setCustomWaterMl(event.target.value)} type="number" min="0" placeholder="Custom ml" />
+                  <Button type="button" variant="secondary" onClick={addCustomWater}>
+                    Add
+                  </Button>
                 </div>
               </div>
               <Field label="Calories" type="number" value={form.calories} onChange={(value) => setForm((prev) => ({ ...prev, calories: value }))} placeholder={`${targets.calories}`} />
@@ -547,6 +722,73 @@ export default function Wellness() {
               </div>
             </div>
 
+            <form onSubmit={searchFoods} className="mb-5 rounded-xl border border-pulse/20 bg-pulse/8 p-4">
+              <div className="mb-4 flex items-center gap-3">
+                <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-pulse/10 text-pulse">
+                  <Database className="h-5 w-5" />
+                </span>
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-muted">Food database</p>
+                  <h3 className="font-semibold text-dark">Search USDA and Open Food Facts</h3>
+                </div>
+              </div>
+              <div className="grid gap-3 md:grid-cols-[1fr_180px_auto] md:items-end">
+                <Field label="Food search" value={foodSearchQuery} onChange={setFoodSearchQuery} placeholder="Chicken breast, banana, Weetabix..." />
+                <div>
+                  <FieldLabel>Source</FieldLabel>
+                  <SelectInput value={foodSearchSource} onChange={(event) => setFoodSearchSource(event.target.value as typeof foodSearchSource)}>
+                    <option value="all">All databases</option>
+                    <option value="open_food_facts">Open Food Facts</option>
+                    <option value="usda">USDA</option>
+                  </SelectInput>
+                </div>
+                <Button type="submit" variant="pulse" disabled={searchingFoods}>
+                  <Search className="h-4 w-4" />
+                  {searchingFoods ? "Searching..." : "Search"}
+                </Button>
+              </div>
+
+              {foodSearchWarnings.length > 0 && (
+                <div className="mt-3 rounded-lg border border-gold/25 bg-gold/10 p-3 text-sm font-semibold text-gold">
+                  {foodSearchWarnings.join(" ")}
+                </div>
+              )}
+
+              {foodSearchResults.length > 0 && (
+                <div className="mt-4 grid gap-2">
+                  {foodSearchResults.map((food) => (
+                    <button
+                      key={`${food.source}-${food.id}`}
+                      type="button"
+                      onClick={() => selectFoodResult(food)}
+                      className={`rounded-lg border p-3 text-left transition hover:border-pulse/40 hover:bg-white/80 ${
+                        selectedFoodResult?.id === food.id && selectedFoodResult.source === food.source
+                          ? "border-pulse bg-white"
+                          : "border-line bg-panel"
+                      }`}
+                    >
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <p className="font-semibold text-dark">{food.name}</p>
+                          <p className="mt-1 text-sm text-muted">
+                            {[food.brand, food.servingLabel || (food.servingGrams ? `${food.servingGrams}g` : null)]
+                              .filter(Boolean)
+                              .join(" - ") || "Serving details not provided"}
+                          </p>
+                        </div>
+                        <span className="w-fit rounded-full bg-pulse/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.12em] text-pulse">
+                          {formatFoodSource(food.source)}
+                        </span>
+                      </div>
+                      <p className="mt-2 text-xs text-muted">
+                        Per 100g: {formatNumber(food.caloriesPer100g)} kcal / {formatGrams(food.proteinPer100g)} protein
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </form>
+
             <form onSubmit={saveFoodEntry} className="mb-5 grid gap-3">
               {savedFoods.length > 0 && (
                 <div>
@@ -570,11 +812,19 @@ export default function Wellness() {
                 </div>
                 <FoodField label="Food" value={foodForm.food_name} onChange={(value) => setFoodForm((prev) => ({ ...prev, food_name: value }))} placeholder="Chicken wrap" />
                 <FoodField label="Serving" value={foodForm.serving} onChange={(value) => setFoodForm((prev) => ({ ...prev, serving: value }))} placeholder="1 wrap / 250g" />
+                <FoodField label="Serving grams" type="number" value={foodForm.serving_grams} onChange={updateServingGrams} placeholder="100" />
                 <FoodField label="Calories" type="number" value={foodForm.calories} onChange={(value) => setFoodForm((prev) => ({ ...prev, calories: value }))} placeholder="520" />
                 <FoodField label="Protein (g)" type="number" value={foodForm.protein_grams} onChange={(value) => setFoodForm((prev) => ({ ...prev, protein_grams: value }))} placeholder="38" />
                 <FoodField label="Carbs (g)" type="number" value={foodForm.carbs_grams} onChange={(value) => setFoodForm((prev) => ({ ...prev, carbs_grams: value }))} placeholder="55" />
                 <FoodField label="Fats (g)" type="number" value={foodForm.fats_grams} onChange={(value) => setFoodForm((prev) => ({ ...prev, fats_grams: value }))} placeholder="14" />
               </div>
+              {foodForm.source !== "manual" && (
+                <div className="rounded-lg border border-pulse/20 bg-pulse/8 p-3 text-sm text-muted">
+                  <span className="font-semibold text-dark">Selected source:</span>{" "}
+                  {formatFoodSource(foodForm.source)}{foodForm.brand ? ` - ${foodForm.brand}` : ""}
+                  {foodForm.barcode ? ` - barcode ${foodForm.barcode}` : ""}
+                </div>
+              )}
               <label className="flex items-center gap-3 text-sm font-medium text-muted">
                 <input type="checkbox" checked={saveAsPreset} onChange={(event) => setSaveAsPreset(event.target.checked)} />
                 Save this food for next time
@@ -621,6 +871,11 @@ export default function Wellness() {
                         <p className="mt-1 text-sm text-muted">
                           {food.serving || "Serving not set"} - {food.calories || 0} kcal / {food.protein_grams || 0}g protein
                         </p>
+                        {food.source && food.source !== "manual" && (
+                          <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-pulse">
+                            {formatFoodSource(food.source)}{food.brand ? ` - ${food.brand}` : ""}
+                          </p>
+                        )}
                       </div>
                       <div className="flex gap-2">
                         <button
@@ -911,6 +1166,11 @@ function MealGroup({
                 <p className="mt-1 text-sm text-muted">
                   {entry.serving || "Serving not set"} - {entry.calories || 0} kcal / {entry.protein_grams || 0}g protein
                 </p>
+                {entry.source && entry.source !== "manual" && (
+                  <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-pulse">
+                    {formatFoodSource(entry.source)}{entry.brand ? ` - ${entry.brand}` : ""}
+                  </p>
+                )}
                 <p className="mt-1 text-xs text-muted">
                   C {entry.carbs_grams || 0}g / F {entry.fats_grams || 0}g
                 </p>
@@ -1242,6 +1502,44 @@ function getTargetStatus(value: number | null | undefined, target: number): "beh
   if (value < target * 0.8) return "behind";
   if (value > target * 1.12) return "ahead";
   return "on-track";
+}
+
+function calculateMacros(food: FoodSearchResult, grams: number) {
+  const multiplier = grams / 100;
+  return {
+    calories: roundMacro(food.caloriesPer100g, multiplier),
+    protein: roundMacro(food.proteinPer100g, multiplier),
+    carbs: roundMacro(food.carbsPer100g, multiplier),
+    fats: roundMacro(food.fatsPer100g, multiplier),
+  };
+}
+
+function foodResultFromForm(form: typeof blankFoodForm): FoodSearchResult | null {
+  if (form.source === "manual") return null;
+  return {
+    id: form.external_id || form.food_name,
+    source: form.source,
+    name: form.food_name,
+    brand: form.brand || null,
+    barcode: form.barcode || null,
+    servingLabel: form.serving_label || null,
+    servingGrams: toNumber(form.serving_grams),
+    caloriesPer100g: toNumber(form.calories_per_100g),
+    proteinPer100g: toNumber(form.protein_per_100g),
+    carbsPer100g: toNumber(form.carbs_per_100g),
+    fatsPer100g: toNumber(form.fats_per_100g),
+  };
+}
+
+function roundMacro(value: number | null, multiplier: number) {
+  if (value === null || value === undefined || !Number.isFinite(value)) return 0;
+  return Math.round(value * multiplier);
+}
+
+function formatFoodSource(source: string) {
+  if (source === "open_food_facts") return "Open Food Facts";
+  if (source === "usda") return "USDA";
+  return "Manual";
 }
 
 function toNumber(value: string) {
