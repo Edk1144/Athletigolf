@@ -141,6 +141,24 @@ export type Workout = {
   created_at: string;
 };
 
+export type CardioSession = {
+  id: string;
+  user_id: string;
+  activity_type: "run" | "walk";
+  session_date: string;
+  distance_km: number | null;
+  duration_minutes: number | null;
+  avg_heart_rate: number | null;
+  calories: number | null;
+  perceived_effort: number | null;
+  route_name: string | null;
+  notes: string | null;
+  source: "manual" | "strava";
+  external_id?: string | null;
+  created_at: string;
+  updated_at?: string | null;
+};
+
 export type PracticeSession = {
   id: string;
   user_id: string;

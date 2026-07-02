@@ -10,6 +10,7 @@ import {
   Droplets,
   Dumbbell,
   Flag,
+  Footprints,
   History,
   Instagram,
   LayoutDashboard,
@@ -48,6 +49,7 @@ const mainLinks: NavItem[] = [
 
 const trainingLinks: NavItem[] = [
   { href: "/workouts/submit", label: "Training Console", icon: PlusCircle, tone: "gym" },
+  { href: "/fitness/cardio", label: "Cardio", icon: Footprints, tone: "gym" },
   { href: "/workouts", label: "Training Board", icon: Dumbbell, tone: "gym" },
   { href: "/gym/history", label: "Training Logbook", icon: History, tone: "gym" },
 ];
@@ -79,6 +81,7 @@ const titles: Record<string, { title: string; section: string }> = {
   "/workouts": { title: "Training Board", section: "Performance Lab" },
   "/workouts/archive": { title: "Archived Splits", section: "Performance Lab" },
   "/workouts/submit": { title: "Training Console", section: "Performance Lab" },
+  "/fitness/cardio": { title: "Cardio", section: "Performance Lab" },
   "/gym/history": { title: "Training Logbook", section: "Performance Lab" },
   "/golf": { title: "Round History", section: "Golf" },
   "/golf/submit": { title: "Round Scorecard", section: "Golf" },

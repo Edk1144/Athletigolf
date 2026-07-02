@@ -8,6 +8,7 @@ import {
   Droplets,
   Dumbbell,
   Flag,
+  Footprints,
   NotebookPen,
   PlusCircle,
   Target,
@@ -405,6 +406,7 @@ export default function Dashboard() {
           <div className="grid gap-3 sm:grid-cols-2">
             {golfEnabled && <Action href="/golf/submit" icon={Flag} title="Round" text="Scorecard entry" tone="golf" />}
             <Action href="/workouts/submit" icon={Dumbbell} title="Training" text="Performance console" tone="pulse" />
+            <Action href="/fitness/cardio" icon={Footprints} title="Cardio" text="Run and walk logs" tone="lab" />
             <Action href="/workouts" icon={PlusCircle} title="Board" text="Plan the week" tone="lab" />
             <Action href="/wellness" icon={Droplets} title="Wellness" text="Hydration and recovery" tone="pulse" />
             <Action href="/social" icon={Users} title="Social" text="Live check-ins" tone="pulse" />

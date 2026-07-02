@@ -228,6 +228,38 @@ Security:
 - Row Level Security enabled.
 - Users can only access rows where `auth.uid() = user_id`.
 
+### `cardio_sessions`
+
+Purpose: running and walking sessions, including future Strava imports.
+
+Required columns:
+
+- `id uuid primary key`
+- `user_id uuid default auth.uid()`
+- `activity_type text default 'run'`
+- `session_date date default current_date`
+- `distance_km numeric default 0`
+- `duration_minutes integer default 0`
+- `avg_heart_rate integer`
+- `calories integer`
+- `perceived_effort integer`
+- `route_name text`
+- `notes text`
+- `source text default 'manual'`
+- `external_id text`
+- `created_at timestamptz`
+- `updated_at timestamptz`
+
+Recommended constraints/indexes:
+
+- Index on `(user_id, session_date desc)`
+- Unique pair on `(source, external_id)` where `external_id is not null`
+
+Security:
+
+- Row Level Security enabled.
+- Users can only access rows where `auth.uid() = user_id`.
+
 ### `daily_wellness_logs`
 
 Purpose: daily manual nutrition, hydration, recovery, and bodyweight signals.
