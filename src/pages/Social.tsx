@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Activity, Check, Copy, Dumbbell, Flag, MapPin, Pencil, ShieldCheck, UserPlus, Users, X } from "lucide-react";
 import { Button, EmptyState, FieldLabel, PageHeader, SelectInput, Surface, TextArea, TextInput } from "@/components/ui";
 import { supabase } from "@/lib/supabase";
-import type { FriendConnection, LiveActivity, OnboardingData } from "@/lib/types";
+import type { FriendConnection, FriendConnectionProfile, FriendSearchResult, LiveActivity, OnboardingData } from "@/lib/types";
+import { normalizeUsername } from "@/lib/usernames";
 
 type ActivityType = LiveActivity["activity_type"];
 
@@ -15,13 +16,17 @@ const activityOptions: Array<{ value: ActivityType; label: string }> = [
 
 export default function Social() {
   const [activities, setActivities] = useState<LiveActivity[]>([]);
-  const [connections, setConnections] = useState<FriendConnection[]>([]);
+  const [connections, setConnections] = useState<FriendConnectionProfile[]>([]);
   const [userId, setUserId] = useState("");
+  const [profileUsername, setProfileUsername] = useState("");
   const [activityType, setActivityType] = useState<ActivityType>("gym");
   const [locationName, setLocationName] = useState("");
   const [detail, setDetail] = useState("");
   const [visibility, setVisibility] = useState<LiveActivity["visibility"]>("friends");
   const [friendId, setFriendId] = useState("");
+  const [friendSearch, setFriendSearch] = useState("");
+  const [searchResults, setSearchResults] = useState<FriendSearchResult[]>([]);
+  const [searching, setSearching] = useState(false);
   const [editingFriendId, setEditingFriendId] = useState("");
   const [friendLabel, setFriendLabel] = useState("");
   const [loading, setLoading] = useState(true);
@@ -41,16 +46,14 @@ export default function Social() {
         .select("*")
         .is("ended_at", null)
         .order("started_at", { ascending: false }),
-      supabase
-        .from("friend_connections")
-        .select("*")
-        .order("created_at", { ascending: false }),
-      supabase.from("profiles").select("onboarding_data").maybeSingle(),
+      supabase.rpc("get_friend_connections_with_profiles"),
+      supabase.from("profiles").select("onboarding_data, username").maybeSingle(),
     ]);
 
     setUserId(authData.user?.id || "");
     setActivities((active as LiveActivity[]) || []);
-    setConnections((friends as FriendConnection[]) || []);
+    setConnections((friends as FriendConnectionProfile[]) || []);
+    setProfileUsername(profile?.username || authData.user?.user_metadata?.username || "");
     const onboarding = (profile?.onboarding_data as OnboardingData | null) || null;
     setVisibility(onboarding?.privacy?.defaultLiveVisibility || "friends");
     setLoading(false);
@@ -110,9 +113,30 @@ export default function Social() {
     await loadSocial();
   }
 
-  async function sendFriendRequest(event: React.FormEvent) {
+  async function searchFriends(event: React.FormEvent) {
     event.preventDefault();
-    const receiverId = friendId.trim();
+    const query = normalizeUsername(friendSearch);
+    if (query.length < 2) {
+      setError("Type at least two username characters.");
+      return;
+    }
+
+    setSearching(true);
+    setError("");
+    const { data, error: searchError } = await supabase.rpc("search_profiles_for_friend", {
+      search_query: query,
+    });
+    setSearching(false);
+
+    if (searchError) {
+      setError(searchError.message);
+      return;
+    }
+
+    setSearchResults((data as FriendSearchResult[]) || []);
+  }
+
+  async function sendFriendRequestTo(receiverId: string) {
     if (!receiverId) return;
     if (receiverId === userId) {
       setError("You cannot add yourself as a friend.");
@@ -134,8 +158,24 @@ export default function Social() {
       return;
     }
 
-    setFriendId("");
+    await searchFriendsFromValue(friendSearch);
     await loadSocial();
+  }
+
+  async function sendFriendRequest(event: React.FormEvent) {
+    event.preventDefault();
+    const receiverId = friendId.trim();
+    await sendFriendRequestTo(receiverId);
+    setFriendId("");
+  }
+
+  async function searchFriendsFromValue(value: string) {
+    const query = normalizeUsername(value);
+    if (query.length < 2) return;
+    const { data } = await supabase.rpc("search_profiles_for_friend", {
+      search_query: query,
+    });
+    setSearchResults((data as FriendSearchResult[]) || []);
   }
 
   async function updateConnection(id: string, status: FriendConnection["status"]) {
@@ -153,6 +193,18 @@ export default function Social() {
     }
 
     await loadSocial();
+  }
+
+  async function acceptIncomingFromSearch(friendUserId: string) {
+    const connection = connections.find(
+      (item) => item.requester_id === friendUserId && item.receiver_id === userId && item.status === "pending"
+    );
+    if (!connection) {
+      setError("That request is not available anymore.");
+      return;
+    }
+    await updateConnection(connection.id, "accepted");
+    await searchFriendsFromValue(friendSearch);
   }
 
   async function removeConnection(id: string) {
@@ -357,26 +409,78 @@ export default function Social() {
             <h2 className="text-xl font-semibold text-dark">Add friend</h2>
           </div>
           <div className="mb-5 rounded-xl border border-pulse/20 bg-pulse/8 p-4">
-            <p className="text-xs font-bold uppercase tracking-[0.16em] text-muted">Your friend code</p>
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-muted">Your username</p>
             <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
               <code className="min-w-0 flex-1 truncate rounded-lg bg-white/70 px-3 py-2 text-xs font-semibold text-dark">
-                {userId || "Loading..."}
+                {profileUsername ? `@${profileUsername}` : "Set your username in Settings"}
               </code>
-              <Button type="button" variant="secondary" onClick={() => navigator.clipboard?.writeText(userId)} disabled={!userId} className="w-full sm:w-auto">
+              <Button type="button" variant="secondary" onClick={() => navigator.clipboard?.writeText(`@${profileUsername}`)} disabled={!profileUsername} className="w-full sm:w-auto">
                 <Copy className="h-4 w-4" />
                 Copy
               </Button>
             </div>
           </div>
-          <form onSubmit={sendFriendRequest} className="grid gap-4">
-            <Field label="Friend code" value={friendId} onChange={setFriendId} placeholder="Paste their AthletiGolf friend code" />
-            <p className="text-sm leading-relaxed text-muted">
-              Friend codes keep this private while the app is still young. Username search can come later.
-            </p>
-            <Button type="submit" variant="pulse" disabled={saving || !friendId.trim()}>
-              Send Request
+          <form onSubmit={searchFriends} className="grid gap-4">
+            <Field
+              label="Search username"
+              value={friendSearch}
+              onChange={(value) => setFriendSearch(normalizeUsername(value))}
+              placeholder="Search @username"
+            />
+            <Button type="submit" variant="pulse" disabled={searching || friendSearch.trim().length < 2}>
+              {searching ? "Searching..." : "Search"}
             </Button>
           </form>
+
+          <div className="mt-5 space-y-3">
+            {searchResults.map((result) => (
+              <div key={result.user_id} className="rounded-xl border border-line bg-white/70 p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="font-semibold text-dark">@{result.username || "unknown"}</p>
+                    {result.display_name && <p className="mt-1 text-sm text-muted">{result.display_name}</p>}
+                    <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-muted">
+                      {getSearchStatusLabel(result)}
+                    </p>
+                  </div>
+                  {result.relationship_direction === "none" ? (
+                    <Button type="button" variant="secondary" onClick={() => sendFriendRequestTo(result.user_id)} disabled={saving}>
+                      <UserPlus className="h-4 w-4" />
+                      Add
+                    </Button>
+                  ) : result.relationship_direction === "incoming" ? (
+                    <Button type="button" variant="secondary" onClick={() => acceptIncomingFromSearch(result.user_id)} disabled={saving}>
+                      <Check className="h-4 w-4" />
+                      Accept
+                    </Button>
+                  ) : (
+                    <span className={getConnectionClass((result.relationship_status || "pending") as FriendConnection["status"])}>
+                      {result.relationship_direction === "accepted" ? "friends" : "requested"}
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+            {friendSearch.length >= 2 && !searching && searchResults.length === 0 && (
+              <p className="rounded-xl border border-dashed border-line bg-white/45 p-4 text-sm text-muted">
+                No matching usernames yet.
+              </p>
+            )}
+          </div>
+
+          <details className="mt-5 rounded-xl border border-line bg-white/70 p-4">
+            <summary className="cursor-pointer text-sm font-semibold text-dark">Backup friend code</summary>
+            <div className="mt-4 rounded-lg bg-cream p-3">
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-muted">Your backup code</p>
+              <code className="mt-2 block truncate text-xs font-semibold text-dark">{userId || "Loading..."}</code>
+            </div>
+            <form onSubmit={sendFriendRequest} className="mt-4 grid gap-3">
+              <Field label="Friend code" value={friendId} onChange={setFriendId} placeholder="Paste a backup friend code" />
+              <Button type="submit" variant="secondary" disabled={saving || !friendId.trim()}>
+                Send Request
+              </Button>
+            </form>
+          </details>
         </Surface>
 
         <Surface>
@@ -540,14 +644,14 @@ function ConnectionSection({
 }: {
   title: string;
   empty: string;
-  connections: FriendConnection[];
+  connections: FriendConnectionProfile[];
   userId: string;
-  action: (connection: FriendConnection) => React.ReactNode;
+  action: (connection: FriendConnectionProfile) => React.ReactNode;
   editingFriendId: string;
   friendLabel: string;
   setFriendLabel: (value: string) => void;
-  onRename: (connection: FriendConnection) => void;
-  onSaveLabel: (connection: FriendConnection) => void;
+  onRename: (connection: FriendConnectionProfile) => void;
+  onSaveLabel: (connection: FriendConnectionProfile) => void;
   onCancelRename: () => void;
 }) {
   return (
@@ -599,13 +703,16 @@ function ConnectionSection({
   );
 }
 
-function getOtherUserId(connection: FriendConnection, userId: string) {
-  return connection.requester_id === userId ? connection.receiver_id : connection.requester_id;
+function getOtherUserId(connection: FriendConnection | FriendConnectionProfile, userId: string) {
+  return "other_user_id" in connection ? connection.other_user_id : connection.requester_id === userId ? connection.receiver_id : connection.requester_id;
 }
 
-function getConnectionLabel(connection: FriendConnection, userId: string) {
+function getConnectionLabel(connection: FriendConnection | FriendConnectionProfile, userId: string) {
   const label = connection.requester_id === userId ? connection.requester_label : connection.receiver_label;
-  return label || `Friend ${getOtherUserId(connection, userId).slice(0, 8)}`;
+  if (label) return label;
+  if ("other_display_name" in connection && connection.other_display_name) return connection.other_display_name;
+  if ("other_username" in connection && connection.other_username) return `@${connection.other_username}`;
+  return `Friend ${getOtherUserId(connection, userId).slice(0, 8)}`;
 }
 
 function getActivityLabel(activity: ActivityType) {
@@ -620,6 +727,13 @@ function getConnectionClass(status: FriendConnection["status"]) {
   if (status === "accepted") return `${base} bg-golf/10 text-golf`;
   if (status === "blocked") return `${base} bg-danger/10 text-danger`;
   return `${base} bg-gold/15 text-gold`;
+}
+
+function getSearchStatusLabel(result: FriendSearchResult) {
+  if (result.relationship_direction === "accepted") return "Already friends";
+  if (result.relationship_direction === "incoming") return "They sent you a request";
+  if (result.relationship_direction === "outgoing") return "Request sent";
+  return "Available to add";
 }
 
 function formatRelativeTime(value: string) {

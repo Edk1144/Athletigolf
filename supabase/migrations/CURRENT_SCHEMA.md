@@ -22,6 +22,9 @@ Required columns:
 
 - `id uuid primary key`
 - `full_name text`
+- `username text`
+- `username_search text unique where not null`
+- `show_display_name_in_search boolean default false`
 - `age integer`
 - `height text`
 - `weight text`
@@ -42,6 +45,9 @@ Security:
 - Row Level Security enabled.
 - Users can only select, insert, update, and delete their own row where
   `auth.uid() = id`.
+- Username discovery does not require public profile reads. It is handled by
+  security-definer functions that return only username, optional display name,
+  and relationship state.
 
 ### `rounds`
 
@@ -269,6 +275,20 @@ Required columns:
 - `protein_grams integer default 0`
 - `carbs_grams integer default 0`
 - `fats_grams integer default 0`
+- `saturated_fats_grams numeric`
+- `sugars_grams numeric`
+- `source text`
+- `external_id text`
+- `brand text`
+- `barcode text`
+- `serving_grams numeric`
+- `serving_label text`
+- `calories_per_100g numeric`
+- `protein_per_100g numeric`
+- `carbs_per_100g numeric`
+- `fats_per_100g numeric`
+- `saturated_fats_per_100g numeric`
+- `sugars_per_100g numeric`
 - `created_at timestamptz`
 - `updated_at timestamptz`
 
@@ -295,6 +315,20 @@ Required columns:
 - `protein_grams integer default 0`
 - `carbs_grams integer default 0`
 - `fats_grams integer default 0`
+- `saturated_fats_grams numeric`
+- `sugars_grams numeric`
+- `source text`
+- `external_id text`
+- `brand text`
+- `barcode text`
+- `serving_grams numeric`
+- `serving_label text`
+- `calories_per_100g numeric`
+- `protein_per_100g numeric`
+- `carbs_per_100g numeric`
+- `fats_per_100g numeric`
+- `saturated_fats_per_100g numeric`
+- `sugars_per_100g numeric`
 - `created_at timestamptz`
 - `updated_at timestamptz`
 
@@ -360,6 +394,23 @@ Security:
 - Row Level Security enabled.
 - Users can manage their own live activity rows.
 - Users can select friends-visible active rows from accepted friends.
+
+## Required Functions
+
+### `search_profiles_for_friend(search_query text)`
+
+Returns limited username search results for authenticated users:
+
+- `user_id`
+- `username`
+- `display_name` only when `show_display_name_in_search = true`
+- `relationship_status`
+- `relationship_direction`
+
+### `get_friend_connections_with_profiles()`
+
+Returns the current user's friend connections with the other user's limited
+profile display fields for the Social page.
 
 ## Bolt Answer
 

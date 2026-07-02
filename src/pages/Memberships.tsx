@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import { Check, Clock, Star } from "lucide-react";
 import { Button, PageHeader, Surface } from "@/components/ui";
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/lib/supabase";
 
 type Plan = {
   name: string;
@@ -13,8 +15,10 @@ type Plan = {
 };
 
 export default function Memberships() {
+  const { user } = useAuth();
   const [selectedPlan, setSelectedPlan] = useState("Free");
   const [message, setMessage] = useState("You're currently using the Free plan.");
+  const [savingInterest, setSavingInterest] = useState("");
 
   const plans: Plan[] = useMemo(
     () => [
@@ -64,7 +68,7 @@ export default function Memberships() {
     []
   );
 
-  const choosePlan = (plan: Plan) => {
+  const choosePlan = async (plan: Plan) => {
     setSelectedPlan(plan.name);
 
     if (plan.status === "current") {
@@ -72,8 +76,26 @@ export default function Memberships() {
       return;
     }
 
+    if (!user) {
+      setMessage("Sign in to join the waitlist.");
+      return;
+    }
+
+    setSavingInterest(plan.name);
+    const { error } = await supabase.from("feedback_reports").insert({
+      user_id: user.id,
+      category: "feature",
+      title: `${plan.name} waitlist interest`,
+      message: `User joined the ${plan.name} membership waitlist from the Memberships page.`,
+      page_url: "/memberships",
+      device_context: navigator.userAgent,
+    });
+    setSavingInterest("");
+
     setMessage(
-      `${plan.name} interest saved. We'll use this as the upgrade target when payments are connected.`
+      error
+        ? error.message
+        : `${plan.name} interest saved. We'll use this as the upgrade target when payments are connected.`
     );
   };
 
@@ -170,6 +192,7 @@ export default function Memberships() {
 
                 <Button
                   onClick={() => choosePlan(plan)}
+                  disabled={savingInterest === plan.name}
                   className={
                     plan.highlighted ? "w-full" : "w-full"
                   }
@@ -183,7 +206,7 @@ export default function Memberships() {
                   ) : (
                     <>
                       <Clock className="h-4 w-4" />
-                      Join Waitlist
+                      {savingInterest === plan.name ? "Saving..." : "Join Waitlist"}
                     </>
                   )}
                 </Button>

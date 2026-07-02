@@ -7,6 +7,7 @@ import { formatAverage, formatPercent, getGolfStats } from "@/lib/golfStats";
 import { getTrainingIntelligence } from "@/lib/insights";
 import { supabase } from "@/lib/supabase";
 import type { Profile, Round, Workout } from "@/lib/types";
+import { isValidUsername, normalizeUsername, usernameRules } from "@/lib/usernames";
 
 export default function Profile() {
   const { user, signOut } = useAuth();
@@ -19,6 +20,7 @@ export default function Profile() {
   const [saveError, setSaveError] = useState("");
 
   const [editName, setEditName] = useState("");
+  const [editUsername, setEditUsername] = useState("");
   const [editAge, setEditAge] = useState("");
   const [editHeight, setEditHeight] = useState("");
   const [editWeight, setEditWeight] = useState("");
@@ -45,6 +47,7 @@ export default function Profile() {
   const openEditor = () => {
     setSaveError("");
     setEditName(profile?.full_name || "");
+    setEditUsername(profile?.username || user?.user_metadata?.username || "");
     setEditAge(profile?.age?.toString() || "");
     setEditHeight(profile?.height || "");
     setEditWeight(profile?.weight || "");
@@ -55,9 +58,17 @@ export default function Profile() {
   const saveProfile = async () => {
     setSaving(true);
     setSaveError("");
+    const cleanUsername = normalizeUsername(editUsername);
+    if (!isValidUsername(cleanUsername)) {
+      setSaveError(usernameRules);
+      setSaving(false);
+      return;
+    }
     const { error } = await supabase.from("profiles").upsert({
       id: user?.id,
       full_name: editName || null,
+      username: cleanUsername,
+      username_search: cleanUsername,
       age: editAge ? Number(editAge) : null,
       height: editHeight || null,
       weight: editWeight || null,
@@ -66,7 +77,7 @@ export default function Profile() {
     setSaving(false);
 
     if (error) {
-      setSaveError(error.message);
+      setSaveError(error.message.includes("username") ? "That username is taken. Try another one." : error.message);
       return;
     }
 
@@ -75,6 +86,7 @@ export default function Profile() {
   };
 
   const name = profile?.full_name || user?.user_metadata?.username || user?.email?.split("@")[0] || "Athlete";
+  const username = profile?.username || user?.user_metadata?.username || "";
   const initial = name.charAt(0).toUpperCase();
   const memberSince = profile?.created_at
     ? new Date(profile.created_at).toLocaleDateString("en-GB", { month: "long", year: "numeric" })
@@ -106,6 +118,7 @@ export default function Profile() {
               <div className="mt-4 flex flex-wrap gap-2">
                 <ProfilePill>{rounds.length} rounds</ProfilePill>
                 <ProfilePill>{workouts.length} training sessions</ProfilePill>
+                {username && <ProfilePill>@{username}</ProfilePill>}
                 <ProfilePill>Member since {memberSince}</ProfilePill>
                 <ProfilePill>Handicap {profile?.golf_handicap ?? "-"}</ProfilePill>
               </div>
@@ -143,6 +156,7 @@ export default function Profile() {
               </div>
               <div className="space-y-3">
                 <DetailRow label="Age" value={profile?.age?.toString() || "-"} />
+                <DetailRow label="Username" value={username ? `@${username}` : "-"} />
                 <DetailRow label="Height" value={profile?.height || "-"} />
                 <DetailRow label="Weight" value={profile?.weight || "-"} />
                 <DetailRow label="Golf Handicap" value={profile?.golf_handicap?.toString() || "-"} />
@@ -233,6 +247,10 @@ export default function Profile() {
 
             <div className="space-y-4">
               <Field label="Full Name" value={editName} onChange={setEditName} placeholder="Enter your name" />
+              <div>
+                <Field label="Username" value={editUsername} onChange={(value) => setEditUsername(normalizeUsername(value))} placeholder="your_username" />
+                <p className="mt-2 text-xs text-muted">{usernameRules}</p>
+              </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="Age" type="number" value={editAge} onChange={setEditAge} placeholder="25" />
                 <Field label="Golf Handicap" type="number" value={editHandicap} onChange={setEditHandicap} placeholder="12.4" />

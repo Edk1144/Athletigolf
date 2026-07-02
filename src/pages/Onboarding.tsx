@@ -5,6 +5,7 @@ import { Button, FieldLabel, Surface, TextArea, TextInput } from "@/components/u
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/lib/supabase";
 import type { OnboardingData } from "@/lib/types";
+import { isValidUsername, normalizeUsername, usernameRules } from "@/lib/usernames";
 import {
   defaultWellnessSetup,
   withCalculatedWellnessTargets,
@@ -39,6 +40,13 @@ const defaultData: OnboardingData = {
   fullName: "",
   mainGoal: "",
   wellness: defaultWellnessSetup,
+  privacy: {
+    defaultLiveVisibility: "friends",
+  },
+  social: {
+    username: "",
+    showDisplayNameInSearch: false,
+  },
   golf: {
     homeCourse: "",
     handicap: "",
@@ -99,6 +107,17 @@ export default function Onboarding() {
       wellness: {
         ...defaultWellnessSetup,
         ...(existing?.wellness || {}),
+      },
+      privacy: {
+        ...(existing?.privacy || {}),
+        defaultLiveVisibility: existing?.privacy?.defaultLiveVisibility || "friends",
+      },
+      social: {
+        ...defaultData.social,
+        ...(existing?.social || {}),
+        username: existing?.social?.username || profile?.username || user.user_metadata?.username || "",
+        showDisplayNameInSearch:
+          existing?.social?.showDisplayNameInSearch ?? profile?.show_display_name_in_search ?? false,
       },
     });
     setLoading(false);
@@ -162,6 +181,20 @@ export default function Onboarding() {
     }));
   }
 
+  function updateSocial<K extends keyof NonNullable<OnboardingData["social"]>>(
+    key: K,
+    value: NonNullable<OnboardingData["social"]>[K]
+  ) {
+    setError("");
+    setData((prev) => ({
+      ...prev,
+      social: {
+        ...(prev.social || {}),
+        [key]: value,
+      },
+    }));
+  }
+
   function toggleRestDay(day: string) {
     const selected = data.training.restDays.includes(day);
     updateTraining(
@@ -182,9 +215,19 @@ export default function Onboarding() {
     setError("");
 
     const wellness = preparedData.wellness;
+    const username = normalizeUsername(preparedData.social?.username || user.user_metadata?.username || "");
+    if (username && !isValidUsername(username)) {
+      setSaving(false);
+      setError(usernameRules);
+      return;
+    }
+
     const { error: saveError } = await supabase.from("profiles").upsert({
       id: user.id,
       full_name: data.fullName || null,
+      username: username || null,
+      username_search: username || null,
+      show_display_name_in_search: preparedData.social?.showDisplayNameInSearch ?? false,
       age: wellness?.age ? Number(wellness.age) : null,
       height: wellness?.heightCm ? `${wellness.heightCm}cm` : null,
       weight: wellness?.weightKg ? `${wellness.weightKg}kg` : null,
@@ -199,7 +242,7 @@ export default function Onboarding() {
     setSaving(false);
 
     if (saveError) {
-      setError(saveError.message);
+      setError(saveError.message.includes("username") ? "That username is taken. Try another one." : saveError.message);
       return;
     }
 
@@ -216,9 +259,13 @@ export default function Onboarding() {
     setError("");
 
     const wellness = preparedData.wellness;
+    const username = normalizeUsername(preparedData.social?.username || user.user_metadata?.username || "");
     const { error: saveError } = await supabase.from("profiles").upsert({
       id: user.id,
       full_name: data.fullName || user.user_metadata?.username || null,
+      username: username || null,
+      username_search: username || null,
+      show_display_name_in_search: preparedData.social?.showDisplayNameInSearch ?? false,
       age: wellness?.age ? Number(wellness.age) : null,
       height: wellness?.heightCm ? `${wellness.heightCm}cm` : null,
       weight: wellness?.weightKg ? `${wellness.weightKg}kg` : null,
@@ -233,7 +280,7 @@ export default function Onboarding() {
     setSaving(false);
 
     if (saveError) {
-      setError(saveError.message);
+      setError(saveError.message.includes("username") ? "That username is taken. Try another one." : saveError.message);
       return;
     }
 
@@ -303,6 +350,15 @@ export default function Onboarding() {
               >
                 <div className="grid gap-4 md:grid-cols-2">
                   <Field label="Name" value={data.fullName} onChange={(value) => update("fullName", value)} placeholder="Edward King" />
+                  <div>
+                    <Field
+                      label="Username"
+                      value={data.social?.username || ""}
+                      onChange={(value) => updateSocial("username", normalizeUsername(value))}
+                      placeholder="edward_golf"
+                    />
+                    <p className="mt-2 text-xs text-muted">{usernameRules}</p>
+                  </div>
                   <Field label="Main goal" value={data.mainGoal} onChange={(value) => update("mainGoal", value)} placeholder="Break 75 and gain clubhead speed" />
                   <ChoiceGroup
                     label="Primary use"
@@ -310,6 +366,15 @@ export default function Onboarding() {
                     options={primaryUseOptions}
                     onChange={(value) => update("mainSport", value as OnboardingData["mainSport"])}
                   />
+                  <label className="flex items-center gap-3 rounded-lg border border-line bg-white/70 px-4 py-3 text-sm font-semibold text-dark md:col-span-2">
+                    <input
+                      type="checkbox"
+                      checked={data.social?.showDisplayNameInSearch ?? false}
+                      onChange={(event) => updateSocial("showDisplayNameInSearch", event.target.checked)}
+                      className="h-4 w-4 accent-pulse"
+                    />
+                    Let people see my display name when they search my username
+                  </label>
                 </div>
               </SetupStep>
             )}

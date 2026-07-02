@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { sportModeLabels, type SportMode } from "@/lib/sportMode";
 import { applyTheme, type AppTheme } from "@/lib/theme";
 import type { OnboardingData } from "@/lib/types";
+import { isValidUsername, normalizeUsername, usernameRules } from "@/lib/usernames";
 
 type SaveState = "idle" | "saving" | "success" | "error";
 
@@ -25,6 +26,7 @@ export default function Settings() {
 
   const [profile, setProfile] = useState({
     full_name: "",
+    username: "",
     golf_handicap: "",
     height: "",
     weight: "",
@@ -35,6 +37,7 @@ export default function Settings() {
     theme: "light",
     notifications_enabled: false,
     default_live_visibility: "friends" as "friends" | "private",
+    show_display_name_in_search: false,
   });
 
   useEffect(() => {
@@ -66,6 +69,7 @@ export default function Settings() {
       setOnboardingData(existingOnboarding);
       setProfile({
         full_name: data.full_name || "",
+        username: data.username || existingOnboarding?.social?.username || "",
         golf_handicap: data.golf_handicap?.toString() || "",
         height: data.height?.toString() || "",
         weight: data.weight?.toString() || "",
@@ -76,6 +80,8 @@ export default function Settings() {
         theme,
         notifications_enabled: data.notifications_enabled ?? false,
         default_live_visibility: existingOnboarding?.privacy?.defaultLiveVisibility || "friends",
+        show_display_name_in_search:
+          data.show_display_name_in_search ?? existingOnboarding?.social?.showDisplayNameInSearch ?? false,
       });
       applyTheme(theme);
     }
@@ -94,9 +100,19 @@ export default function Settings() {
       return;
     }
 
+    const cleanUsername = normalizeUsername(profile.username);
+    if (!isValidUsername(cleanUsername)) {
+      setSaveState("error");
+      setErrorMessage(usernameRules);
+      return;
+    }
+
     const { error } = await supabase.from("profiles").upsert({
       id: user.id,
       full_name: profile.full_name || null,
+      username: cleanUsername,
+      username_search: cleanUsername,
+      show_display_name_in_search: profile.show_display_name_in_search,
       golf_handicap: profile.golf_handicap ? Number(profile.golf_handicap) : null,
       height: profile.height || null,
       weight: profile.weight || null,
@@ -112,13 +128,18 @@ export default function Settings() {
           ...((onboardingData as OnboardingData | null)?.privacy || {}),
           defaultLiveVisibility: profile.default_live_visibility,
         },
+        social: {
+          ...((onboardingData as OnboardingData | null)?.social || {}),
+          username: cleanUsername,
+          showDisplayNameInSearch: profile.show_display_name_in_search,
+        },
       },
       updated_at: new Date().toISOString(),
     });
 
     if (error) {
       setSaveState("error");
-      setErrorMessage(error.message || "Could not save settings. Please try again.");
+      setErrorMessage(error.message.includes("username") ? "That username is taken. Try another one." : error.message || "Could not save settings. Please try again.");
     } else {
       setSaveState("success");
       setTimeout(() => setSaveState("idle"), 3000);
@@ -197,6 +218,17 @@ export default function Settings() {
                   value={profile.full_name}
                   onChange={(e) => set("full_name", e.target.value)}
                 />
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-sm text-muted">Username</label>
+                <input
+                  className="rounded-lg border border-line bg-white p-4 text-ink outline-none transition focus:border-pulse/50 focus:ring-4 focus:ring-pulse/10"
+                  placeholder="e.g. jamie_golf"
+                  value={profile.username}
+                  onChange={(e) => set("username", normalizeUsername(e.target.value))}
+                />
+                <span className="text-xs text-muted">{usernameRules}</span>
               </div>
 
               <div className="flex flex-col gap-1">
@@ -442,9 +474,37 @@ export default function Settings() {
                 </div>
 
                 <div className="rounded-xl border border-pulse/20 bg-pulse/8 p-4">
-                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-muted">Your friend code</p>
+                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-muted">Your username</p>
                   <div className="mt-2 flex items-center gap-2">
                     <code className="min-w-0 flex-1 truncate rounded-lg bg-white/70 px-3 py-2 text-xs font-semibold text-dark">
+                      @{profile.username || "set_username"}
+                    </code>
+                    <button
+                      type="button"
+                      onClick={() => navigator.clipboard?.writeText(profile.username ? `@${profile.username}` : "")}
+                      className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-line bg-white text-dark transition hover:border-pulse/40"
+                      disabled={!profile.username}
+                    >
+                      <Copy className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <p className="mt-2 text-sm text-muted">Friends can find you by username. Your account ID stays as a backup code.</p>
+                </div>
+
+                <label className="flex cursor-pointer items-center gap-4 rounded-xl border border-line bg-white/70 p-4">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 accent-pulse"
+                    checked={profile.show_display_name_in_search}
+                    onChange={(e) => set("show_display_name_in_search", e.target.checked)}
+                  />
+                  <span className="text-sm font-medium text-dark">Show my display name in username search</span>
+                </label>
+
+                <div className="rounded-xl border border-line bg-white/70 p-4">
+                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-muted">Backup friend code</p>
+                  <div className="mt-2 flex items-center gap-2">
+                    <code className="min-w-0 flex-1 truncate rounded-lg bg-cream px-3 py-2 text-xs font-semibold text-dark">
                       {userId || "Loading..."}
                     </code>
                     <button
@@ -456,7 +516,6 @@ export default function Settings() {
                       <Copy className="h-4 w-4" />
                     </button>
                   </div>
-                  <p className="mt-2 text-sm text-muted">Only share this with people you want to add.</p>
                 </div>
 
                 <button

@@ -1,6 +1,9 @@
 export type Profile = {
   id: string;
   full_name: string | null;
+  username?: string | null;
+  username_search?: string | null;
+  show_display_name_in_search?: boolean | null;
   age: number | null;
   height: string | null;
   weight: string | null;
@@ -33,6 +36,10 @@ export type OnboardingData = {
   };
   privacy?: {
     defaultLiveVisibility: "friends" | "private";
+  };
+  social?: {
+    username?: string;
+    showDisplayNameInSearch?: boolean;
   };
   golf: {
     homeCourse: string;
@@ -284,6 +291,20 @@ export type FriendConnection = {
   status: "pending" | "accepted" | "blocked";
   created_at: string;
   updated_at?: string | null;
+};
+
+export type FriendSearchResult = {
+  user_id: string;
+  username: string | null;
+  display_name: string | null;
+  relationship_status: FriendConnection["status"] | null;
+  relationship_direction: "none" | "incoming" | "outgoing" | "accepted";
+};
+
+export type FriendConnectionProfile = FriendConnection & {
+  other_user_id: string;
+  other_username: string | null;
+  other_display_name: string | null;
 };
 
 export type LiveActivity = {

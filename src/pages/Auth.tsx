@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { ArrowRight, ShieldCheck } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { Button, FieldLabel, TextInput } from "@/components/ui";
+import { isValidUsername, normalizeUsername, usernameRules } from "@/lib/usernames";
 
 export default function AuthPage() {
   const { signUp, signIn } = useAuth();
@@ -22,7 +23,11 @@ export default function AuthPage() {
       if (isLogin) {
         await signIn(email, password);
       } else {
-        await signUp(email, password, username);
+        const cleanUsername = normalizeUsername(username);
+        if (!isValidUsername(cleanUsername)) {
+          throw new Error(usernameRules);
+        }
+        await signUp(email, password, cleanUsername);
       }
       navigate("/dashboard");
     } catch (err: unknown) {
@@ -86,8 +91,10 @@ export default function AuthPage() {
                   type="text"
                   placeholder="Enter username"
                   value={username}
-                  onChange={(e) => setUsername(e.target.value)}
+                  onChange={(e) => setUsername(normalizeUsername(e.target.value))}
+                  required
                 />
+                <p className="mt-2 text-xs text-muted">{usernameRules}</p>
               </div>
             )}
 

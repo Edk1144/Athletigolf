@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Activity, CalendarDays, ChevronLeft, ChevronRight, Copy, Database, Flame, Moon, Pencil, Plus, Scale, Search, Trash2, Utensils, Zap } from "lucide-react";
 import { Button, EmptyState, FieldLabel, PageHeader, SelectInput, Surface, TextArea, TextInput } from "@/components/ui";
 import { supabase } from "@/lib/supabase";
-import type { FoodSearchResult, NutritionEntry, OnboardingData, SavedFood, WellnessLog } from "@/lib/types";
+import type { FoodSearchResult, NutritionEntry, OnboardingData, PracticeSession, Round, SavedFood, WellnessLog, Workout } from "@/lib/types";
 import { defaultWellnessTargets, getWellnessTargets, type WellnessTargets } from "@/lib/wellnessTargets";
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
@@ -65,6 +65,9 @@ export default function Wellness() {
   const [logs, setLogs] = useState<WellnessLog[]>([]);
   const [nutritionEntries, setNutritionEntries] = useState<NutritionEntry[]>([]);
   const [savedFoods, setSavedFoods] = useState<SavedFood[]>([]);
+  const [rounds, setRounds] = useState<Round[]>([]);
+  const [workouts, setWorkouts] = useState<Workout[]>([]);
+  const [practices, setPractices] = useState<PracticeSession[]>([]);
   const [targets, setTargets] = useState<WellnessTargets>(defaultWellnessTargets);
   const [selectedLog, setSelectedLog] = useState<WellnessLog | null>(null);
   const [form, setForm] = useState(blankForm);
@@ -98,7 +101,7 @@ export default function Wellness() {
 
   async function loadLogs() {
     setLoading(true);
-    const [{ data }, { data: profile }, { data: entries }, { data: foods }] = await Promise.all([
+    const [{ data }, { data: profile }, { data: entries }, { data: foods }, { data: roundData }, { data: workoutData }, { data: practiceData }] = await Promise.all([
       supabase
         .from("daily_wellness_logs")
         .select("*")
@@ -114,6 +117,21 @@ export default function Wellness() {
         .from("saved_foods")
         .select("*")
         .order("food_name", { ascending: true }),
+      supabase
+        .from("rounds")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(20),
+      supabase
+        .from("workouts")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(20),
+      supabase
+        .from("practice_sessions")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(20),
     ]);
 
     const loadedLogs = (data as WellnessLog[]) || [];
@@ -122,6 +140,9 @@ export default function Wellness() {
     setLogs(loadedLogs);
     setNutritionEntries((entries as NutritionEntry[]) || []);
     setSavedFoods((foods as SavedFood[]) || []);
+    setRounds((roundData as Round[]) || []);
+    setWorkouts((workoutData as Workout[]) || []);
+    setPractices((practiceData as PracticeSession[]) || []);
     const todayLog = loadedLogs.find((log) => log.log_date === todayIso()) || null;
     setSelectedLog(todayLog);
     setForm(todayLog ? formFromLog(todayLog) : blankForm);
@@ -776,7 +797,10 @@ export default function Wellness() {
   const weekLogs = useMemo(() => logs.slice(0, 7), [logs]);
   const weekly = useMemo(() => getWeeklySummary(weekLogs), [weekLogs]);
   const todayScore = useMemo(() => getDailyCompletion(todayLog, targets), [todayLog, targets]);
-  const insights = useMemo(() => buildWellnessInsights(weekLogs, targets, nutritionTotals), [weekLogs, targets, nutritionTotals]);
+  const insights = useMemo(
+    () => buildWellnessInsights(weekLogs, targets, nutritionTotals, rounds, workouts, practices),
+    [weekLogs, targets, nutritionTotals, rounds, workouts, practices]
+  );
   const nutritionStatus = useMemo(() => buildNutritionStatus(displayNutrition, targets), [displayNutrition, targets]);
 
   if (loading) {
@@ -1298,13 +1322,22 @@ export default function Wellness() {
         </Surface>
 
         <Surface>
-          <h2 className="mb-5 text-xl font-semibold text-dark">Wellness insights</h2>
-          <div className="grid gap-3 md:grid-cols-3">
+          <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-pulse">AthletiAI</p>
+              <h2 className="mt-1 text-xl font-semibold text-dark">Wellness insights</h2>
+            </div>
+            <span className="w-fit rounded-full bg-pulse/10 px-3 py-1 text-xs font-bold text-pulse">
+              Smart summary
+            </span>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
             {insights.map((insight) => (
               <div key={insight.title} className={`rounded-xl border p-4 ${insight.tone}`}>
                 <p className="text-xs font-bold uppercase tracking-[0.16em] text-muted">{insight.label}</p>
                 <h3 className="mt-2 font-semibold text-dark">{insight.title}</h3>
                 <p className="mt-2 text-sm leading-relaxed text-muted">{insight.detail}</p>
+                <p className="mt-3 rounded-lg bg-white/55 p-2 text-xs font-semibold text-dark">{insight.action}</p>
               </div>
             ))}
           </div>
@@ -1822,71 +1855,205 @@ function getDailyCompletion(log: WellnessLog | null | undefined, targets: Wellne
   return Math.round(values.reduce((sum, value) => sum + value, 0) / values.length);
 }
 
+function countRecentByDate<T>(items: T[], days: number, getDate: (item: T) => string | null | undefined) {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - days);
+  return items.filter((item) => {
+    const value = getDate(item);
+    return value ? new Date(value) >= cutoff : false;
+  }).length;
+}
+
 function buildWellnessInsights(
   logs: WellnessLog[],
   targets: WellnessTargets,
-  nutritionTotals: ReturnType<typeof getNutritionTotals>
+  nutritionTotals: ReturnType<typeof getNutritionTotals>,
+  rounds: Round[],
+  workouts: Workout[],
+  practices: PracticeSession[]
 ) {
   const weekly = getWeeklySummary(logs);
   const loggedDays = logs.length;
-  const lowHydrationWithLowEnergy = logs.some(
-    (log) =>
-      log.energy_rating !== null &&
-      log.energy_rating !== undefined &&
-      log.energy_rating <= 5 &&
-      (log.water_litres ?? 0) < targets.waterLitres * 0.75
-  );
-  const insights = [
+  const lowEnergyDays = logs.filter((log) => (log.energy_rating ?? 10) <= 5);
+  const lowSleepDays = logs.filter((log) => (log.sleep_hours ?? targets.sleepHours) < targets.sleepHours - 0.75);
+  const lowHydrationDays = logs.filter((log) => (log.water_litres ?? targets.waterLitres) < targets.waterLitres * 0.75);
+  const calorieGap = targets.calories - nutritionTotals.calories;
+  const proteinGap = targets.proteinGrams - nutritionTotals.protein;
+  const carbTarget = Math.round((targets.calories * 0.48) / 4);
+  const recentRounds = countRecentByDate(rounds, 7, (round) => round.date || round.created_at);
+  const recentWorkouts = countRecentByDate(workouts, 7, (workout) => workout.date || workout.created_at);
+  const recentPractices = countRecentByDate(practices, 7, (practice) => practice.created_at);
+  const recentLoad = recentRounds + recentWorkouts + recentPractices;
+  const avgScore = average(rounds.slice(0, 5).map((round) => round.score));
+  const avgPracticeRating = average(practices.slice(0, 5).map((practice) => practice.rating));
+  const hasEnoughSignal = loggedDays >= 5;
+  const recoveryDriver =
+    lowSleepDays.length >= 2
+      ? "sleep"
+      : lowHydrationDays.length >= 2
+      ? "hydration"
+      : lowEnergyDays.length >= 2
+      ? "energy"
+      : "consistency";
+  const fuelStatus =
+    nutritionTotals.calories === 0
+      ? "empty"
+      : calorieGap > targets.calories * 0.2 || proteinGap > targets.proteinGrams * 0.2
+      ? "behind"
+      : nutritionTotals.calories > targets.calories * 1.12
+      ? "high"
+      : "on-track";
+  const performanceContext =
+    recentLoad === 0
+      ? "No recent training, practice or rounds are logged, so this is pure wellness signal for now."
+      : `${recentLoad} sport sessions this week: ${recentRounds} round${recentRounds === 1 ? "" : "s"}, ${recentWorkouts} workout${recentWorkouts === 1 ? "" : "s"} and ${recentPractices} practice log${recentPractices === 1 ? "" : "s"}.`;
+
+  return [
     {
-      label: "Consistency",
-      title: loggedDays >= 5 ? "Wellness signal is building" : "Build the baseline",
-      detail: loggedDays >= 5 ? "You have enough recent days to start comparing wellness against training and golf." : `Log ${Math.max(0, 5 - loggedDays)} more days to make the signal useful.`,
-      tone: loggedDays >= 5 ? "border-golf/20 bg-golf/8" : "border-gold/25 bg-gold/10",
-    },
-    {
-      label: "Hydration",
-      title: (weekly.avgWater ?? 0) >= targets.waterLitres ? "Hydration is on target" : "Hydration needs attention",
-      detail: weekly.avgWater === null ? "Add water totals to see whether hydration is helping or hurting practice days." : `Recent average is ${formatLitres(weekly.avgWater)} against a ${targets.waterLitres} L target.`,
-      tone: (weekly.avgWater ?? 0) >= targets.waterLitres ? "border-pulse/20 bg-pulse/8" : "border-gold/25 bg-gold/10",
-    },
-    {
-      label: "Recovery",
-      title: (weekly.avgSleep ?? 0) >= targets.sleepHours - 0.5 ? "Sleep is usable" : "Sleep may limit output",
-      detail: weekly.avgSleep === null ? "Add sleep hours so AthletiGolf can compare recovery with training quality." : `Recent sleep average is ${formatHours(weekly.avgSleep)}.`,
-      tone: (weekly.avgSleep ?? 0) >= targets.sleepHours - 0.5 ? "border-lab/20 bg-lab/8" : "border-gold/25 bg-gold/10",
-    },
-    {
-      label: "Energy Link",
-      title: lowHydrationWithLowEnergy ? "Hydration may be dragging energy" : "Energy link is watching",
-      detail: lowHydrationWithLowEnergy
-        ? "At least one low-energy day also had low water intake. Keep logging to see whether that pattern repeats."
-        : "Once low-energy days appear, AthletiGolf will compare them against hydration and recovery signals.",
-      tone: lowHydrationWithLowEnergy ? "border-gold/25 bg-gold/10" : "border-pulse/20 bg-pulse/8",
-    },
-    {
-      label: "Nutrition",
+      label: "Recovery readout",
       title:
-        nutritionTotals.calories === 0
-          ? "Add meals to unlock nutrition"
-          : nutritionTotals.protein < targets.proteinGrams * 0.8
-          ? "Protein is behind target"
-          : nutritionTotals.calories < targets.calories * 0.75
-          ? "Calories look light"
-          : "Fuel is on track",
+        recoveryDriver === "sleep"
+          ? "Sleep is the likely limiter"
+          : recoveryDriver === "hydration"
+          ? "Hydration is probably dragging energy"
+          : recoveryDriver === "energy"
+          ? "Energy is dipping without a clear cause"
+          : hasEnoughSignal
+          ? "Recovery looks usable"
+          : "Build the recovery baseline",
       detail:
-        nutritionTotals.calories === 0
-          ? "Meal entries make the nutrition side much more useful than one daily total."
-          : `${nutritionTotals.calories} kcal and ${nutritionTotals.protein}g protein logged today.`,
-      tone:
-        nutritionTotals.calories === 0
-          ? "border-gold/25 bg-gold/10"
-          : nutritionTotals.protein < targets.proteinGrams * 0.8
-          ? "border-gold/25 bg-gold/10"
-          : "border-golf/20 bg-golf/8",
+        recoveryDriver === "sleep"
+          ? `${lowSleepDays.length} recent day${lowSleepDays.length === 1 ? "" : "s"} came in below sleep target, which can explain flat training or poor focus.`
+          : recoveryDriver === "hydration"
+          ? `${lowHydrationDays.length} recent day${lowHydrationDays.length === 1 ? "" : "s"} missed hydration by a clear margin.`
+          : recoveryDriver === "energy"
+          ? `${lowEnergyDays.length} low-energy day${lowEnergyDays.length === 1 ? "" : "s"} logged. Keep sleep, water and food complete so AthletiGolf can isolate the cause.`
+          : hasEnoughSignal
+          ? `Recent averages: ${formatHours(weekly.avgSleep)} sleep, ${formatLitres(weekly.avgWater)} water and ${weekly.avgEnergy === null ? "-" : `${weekly.avgEnergy.toFixed(1)}/10`} energy.`
+          : `Log ${Math.max(0, 5 - loggedDays)} more day${Math.max(0, 5 - loggedDays) === 1 ? "" : "s"} to make the recovery readout sharper.`,
+      action:
+        recoveryDriver === "sleep"
+          ? `Aim for ${targets.sleepHours}h tonight before judging tomorrow's training quality.`
+          : recoveryDriver === "hydration"
+          ? `Get to ${targets.waterLitres} L and check whether energy rebounds.`
+          : "Keep the daily sleep, water and energy fields complete.",
+      tone: recoveryDriver === "consistency" && hasEnoughSignal ? "border-golf/20 bg-golf/8" : "border-gold/25 bg-gold/10",
+    },
+    {
+      label: "Nutrition pattern",
+      title:
+        fuelStatus === "empty"
+          ? "Food data is missing"
+          : fuelStatus === "behind"
+          ? "Fuel is behind the workload"
+          : fuelStatus === "high"
+          ? "Calories are running high"
+          : "Fuel is in a useful range",
+      detail:
+        fuelStatus === "empty"
+          ? "Add meals or quick calories before using nutrition to explain performance."
+          : proteinGap > targets.proteinGrams * 0.2
+          ? `Protein is ${Math.max(0, Math.round(proteinGap))}g short. That is the first nutrition gap to close.`
+          : calorieGap > targets.calories * 0.2
+          ? `Calories are ${Math.round(calorieGap)} under target, which matters more on workout, practice or round days.`
+          : nutritionTotals.calories > targets.calories * 1.12
+          ? `${nutritionTotals.calories} kcal is above target. Fine occasionally, but worth watching across the week.`
+          : `${nutritionTotals.calories} kcal, ${nutritionTotals.protein}g protein and ${nutritionTotals.carbs}g carbs logged today.`,
+      action:
+        fuelStatus === "empty"
+          ? "Log one real meal or copy a previous day to unlock this."
+          : proteinGap > 0
+          ? `Add about ${Math.max(10, Math.round(proteinGap))}g protein before the day closes.`
+          : nutritionTotals.carbs < carbTarget * 0.75 && recentLoad > 0
+          ? "Add a carb-heavy meal around training or practice."
+          : "Keep meals logged by meal type so patterns become obvious.",
+      tone: fuelStatus === "behind" || fuelStatus === "empty" ? "border-gold/25 bg-gold/10" : fuelStatus === "high" ? "border-danger/20 bg-danger/8" : "border-golf/20 bg-golf/8",
+    },
+    {
+      label: "Golf + training link",
+      title:
+        recentLoad >= 4 && fuelStatus === "behind"
+          ? "Load is high while fuel is low"
+          : recentLoad >= 4
+          ? "Busy performance week"
+          : recentLoad > 0
+          ? "Performance context is building"
+          : "Connect sport data next",
+      detail:
+        recentLoad >= 4 && fuelStatus === "behind"
+          ? `${performanceContext} Under-fuelling this week could show up as weaker gym output or less focused practice.`
+          : recentLoad > 0
+          ? `${performanceContext}${avgScore ? ` Recent scoring average is ${avgScore.toFixed(1)}.` : ""}${avgPracticeRating ? ` Practice rating is ${avgPracticeRating.toFixed(1)}/10.` : ""}`
+          : performanceContext,
+      action:
+        recentLoad === 0
+          ? "Log a round, workout or practice session to connect wellness with performance."
+          : fuelStatus === "behind"
+          ? "Treat nutrition as part of the session, not a separate chore."
+          : "Keep logging sport days so AthletiAI can spot your best-performance conditions.",
+      tone: recentLoad >= 4 && fuelStatus === "behind" ? "border-danger/20 bg-danger/8" : recentLoad > 0 ? "border-pulse/20 bg-pulse/8" : "border-gold/25 bg-gold/10",
+    },
+    {
+      label: "Next action",
+      title:
+        proteinGap > 0
+          ? "Close protein first"
+          : calorieGap > targets.calories * 0.15
+          ? "Bring calories up"
+          : lowSleepDays.length
+          ? "Protect tonight's sleep"
+          : lowHydrationDays.length
+          ? "Hydrate before chasing more volume"
+          : "Hold the line",
+      detail:
+        proteinGap > 0
+          ? `Protein has the clearest immediate return: it supports recovery and keeps the day useful even if calories are imperfect.`
+          : calorieGap > targets.calories * 0.15
+          ? `You are ${Math.round(calorieGap)} kcal under. On a training or golf day, that can become tomorrow's low energy.`
+          : lowSleepDays.length
+          ? "Sleep is the recovery lever with the broadest effect on practice quality, appetite and gym output."
+          : lowHydrationDays.length
+          ? "Hydration is a low-friction fix before changing training or food decisions."
+          : "No urgent correction. The job is consistency: keep enough data coming in.",
+      action:
+        proteinGap > 0
+          ? `Add a meal or snack with ${Math.max(10, Math.round(proteinGap))}g protein.`
+          : calorieGap > targets.calories * 0.15
+          ? "Add a proper meal rather than only snacks."
+          : lowSleepDays.length
+          ? "Set tomorrow up by logging sleep and energy again."
+          : "Repeat the day and watch the weekly trend.",
+      tone: proteinGap > 0 || calorieGap > targets.calories * 0.15 || lowSleepDays.length ? "border-gold/25 bg-gold/10" : "border-golf/20 bg-golf/8",
+    },
+    {
+      label: "Coach summary",
+      title:
+        !hasEnoughSignal
+          ? "AthletiAI needs more signal"
+          : recoveryDriver === "sleep" || fuelStatus === "behind"
+          ? "Recovery needs support"
+          : recentLoad > 0
+          ? "Good week to compare performance"
+          : "Wellness base is forming",
+      detail:
+        !hasEnoughSignal
+          ? "The system can already guide today, but weekly coaching gets better after five complete days."
+          : recoveryDriver === "sleep" && fuelStatus === "behind"
+          ? "The main risk is stacking poor sleep with low fuel. That combination can make training feel worse than it should."
+          : recoveryDriver === "sleep"
+          ? "Sleep is the priority lever this week. Keep food steady while you fix recovery."
+          : fuelStatus === "behind"
+          ? "Fuel is the obvious limiter. Before changing the training plan, make sure the day is fed properly."
+          : recentLoad > 0
+          ? "You have enough sport context to start watching which wellness conditions produce better scores, sessions and practice ratings."
+          : "Wellness logging is becoming useful. Add sport data to make it performance-specific.",
+      action:
+        !hasEnoughSignal
+          ? `Complete ${Math.max(0, 5 - loggedDays)} more daily log${Math.max(0, 5 - loggedDays) === 1 ? "" : "s"}.`
+          : "Use this as the daily coach note, then compare it with tomorrow's energy.",
+      tone: hasEnoughSignal ? "border-lab/20 bg-lab/8" : "border-gold/25 bg-gold/10",
     },
   ];
-
-  return insights.slice(0, 5);
 }
 
 function buildNutritionStatus(

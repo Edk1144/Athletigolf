@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { supabase } from "@/lib/supabase";
+import { normalizeUsername } from "@/lib/usernames";
 import type { User, Session } from "@supabase/supabase-js";
 
 interface AuthContextType {
@@ -34,10 +35,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signUp = async (email: string, password: string, username: string) => {
+    const cleanUsername = normalizeUsername(username);
     const { error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { username } },
+      options: { data: { username: cleanUsername } },
     });
     if (error) throw error;
   };
