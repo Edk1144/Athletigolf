@@ -36,6 +36,7 @@ export type OnboardingData = {
   };
   privacy?: {
     defaultLiveVisibility: "friends" | "private";
+    notificationsEnabled?: boolean;
   };
   social?: {
     username?: string;
@@ -348,6 +349,7 @@ export type FeedbackReport = {
   page_url: string | null;
   device_context: string | null;
   status: "new" | "reviewing" | "resolved" | "closed";
+  deleted_at?: string | null;
   created_at: string;
   updated_at?: string | null;
 };

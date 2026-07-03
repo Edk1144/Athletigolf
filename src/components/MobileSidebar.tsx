@@ -387,15 +387,38 @@ function NotificationBell({ compact = false }: { compact?: boolean }) {
   const [, navigate] = useLocation();
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
 
   useEffect(() => {
-    loadNotifications();
+    let cancelled = false;
 
-    const timer = window.setInterval(loadNotifications, 30000);
-    return () => window.clearInterval(timer);
-  }, []);
+    async function initialiseNotifications() {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("notifications_enabled")
+        .maybeSingle();
+      const enabled = profile?.notifications_enabled === true;
+      if (cancelled) return;
+      setNotificationsEnabled(enabled);
+      if (enabled) await loadNotifications();
+      else setNotifications([]);
+    }
+
+    initialiseNotifications();
+    const timer = window.setInterval(() => {
+      if (notificationsEnabled) loadNotifications();
+    }, 30000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [notificationsEnabled]);
 
   async function loadNotifications() {
+    if (!notificationsEnabled) {
+      setNotifications([]);
+      return;
+    }
     const { data } = await supabase
       .from("notifications")
       .select("*")
@@ -451,14 +474,24 @@ function NotificationBell({ compact = false }: { compact?: boolean }) {
           <div className="flex items-center justify-between border-b border-line p-4">
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.16em] text-muted">Notifications</p>
-              <h3 className="font-semibold text-dark">{unreadCount} unread</h3>
+              <h3 className="font-semibold text-dark">{notificationsEnabled ? `${unreadCount} unread` : "Turned off"}</h3>
             </div>
-            <button type="button" onClick={markAllRead} className="text-xs font-bold uppercase tracking-[0.12em] text-pulse">
-              Mark read
-            </button>
+            {notificationsEnabled ? (
+              <button type="button" onClick={markAllRead} className="text-xs font-bold uppercase tracking-[0.12em] text-pulse">
+                Mark read
+              </button>
+            ) : (
+              <button type="button" onClick={() => navigate("/settings")} className="text-xs font-bold uppercase tracking-[0.12em] text-pulse">
+                Settings
+              </button>
+            )}
           </div>
 
-          {notifications.length ? (
+          {!notificationsEnabled ? (
+            <div className="p-5 text-sm leading-relaxed text-muted">
+              Notifications are turned off in Settings.
+            </div>
+          ) : notifications.length ? (
             <div className="max-h-[420px] overflow-y-auto">
               {notifications.map((notification) => (
                 <button

@@ -42,6 +42,7 @@ const defaultData: OnboardingData = {
   wellness: defaultWellnessSetup,
   privacy: {
     defaultLiveVisibility: "friends",
+    notificationsEnabled: false,
   },
   social: {
     username: "",
@@ -111,6 +112,7 @@ export default function Onboarding() {
       privacy: {
         ...(existing?.privacy || {}),
         defaultLiveVisibility: existing?.privacy?.defaultLiveVisibility || "friends",
+        notificationsEnabled: existing?.privacy?.notificationsEnabled ?? profile?.notifications_enabled ?? false,
       },
       social: {
         ...defaultData.social,
@@ -228,6 +230,7 @@ export default function Onboarding() {
       username: username || null,
       username_search: username || null,
       show_display_name_in_search: preparedData.social?.showDisplayNameInSearch ?? false,
+      notifications_enabled: preparedData.privacy?.notificationsEnabled ?? false,
       age: wellness?.age ? Number(wellness.age) : null,
       height: wellness?.heightCm ? `${wellness.heightCm}cm` : null,
       weight: wellness?.weightKg ? `${wellness.weightKg}kg` : null,
@@ -266,6 +269,7 @@ export default function Onboarding() {
       username: username || null,
       username_search: username || null,
       show_display_name_in_search: preparedData.social?.showDisplayNameInSearch ?? false,
+      notifications_enabled: preparedData.privacy?.notificationsEnabled ?? false,
       age: wellness?.age ? Number(wellness.age) : null,
       height: wellness?.heightCm ? `${wellness.heightCm}cm` : null,
       weight: wellness?.weightKg ? `${wellness.weightKg}kg` : null,
@@ -374,6 +378,20 @@ export default function Onboarding() {
                       className="h-4 w-4 accent-pulse"
                     />
                     Let people see my display name when they search my username
+                  </label>
+                  <label className="flex items-center gap-3 rounded-lg border border-line bg-white/70 px-4 py-3 text-sm font-semibold text-dark md:col-span-2">
+                    <input
+                      type="checkbox"
+                      checked={data.privacy?.notificationsEnabled ?? false}
+                      onChange={(event) =>
+                        update("privacy", {
+                          ...(data.privacy || { defaultLiveVisibility: "friends" }),
+                          notificationsEnabled: event.target.checked,
+                        })
+                      }
+                      className="h-4 w-4 accent-pulse"
+                    />
+                    Turn on in-app notifications
                   </label>
                 </div>
               </SetupStep>

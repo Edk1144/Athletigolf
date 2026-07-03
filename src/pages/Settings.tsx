@@ -25,6 +25,7 @@ export default function Settings() {
   const [errorMessage, setErrorMessage] = useState("");
   const [dataRequestState, setDataRequestState] = useState<SaveState>("idle");
   const [dataRequestMessage, setDataRequestMessage] = useState("");
+  const [closingAccount, setClosingAccount] = useState(false);
 
   const [profile, setProfile] = useState({
     full_name: "",
@@ -129,6 +130,7 @@ export default function Settings() {
         privacy: {
           ...((onboardingData as OnboardingData | null)?.privacy || {}),
           defaultLiveVisibility: profile.default_live_visibility,
+          notificationsEnabled: profile.notifications_enabled,
         },
         social: {
           ...((onboardingData as OnboardingData | null)?.social || {}),
@@ -185,7 +187,7 @@ export default function Settings() {
     setTimeout(() => setSaveState("idle"), 3000);
   }
 
-  async function requestAccountDataAction(action: "export" | "deletion") {
+  async function requestAccountDataExport() {
     setDataRequestState("saving");
     setDataRequestMessage("");
 
@@ -195,7 +197,7 @@ export default function Settings() {
       return;
     }
 
-    const title = action === "export" ? "Account data export request" : "Account data deletion request";
+    const title = "Account data export request";
     const { error } = await supabase.from("feedback_reports").insert({
       user_id: user.id,
       category: "other",
@@ -213,8 +215,30 @@ export default function Settings() {
     }
 
     setDataRequestState("success");
-    setDataRequestMessage(action === "export" ? "Export request sent." : "Deletion request sent.");
+    setDataRequestMessage("Export request sent.");
     setTimeout(() => setDataRequestState("idle"), 5000);
+  }
+
+  async function closeAccount() {
+    const confirmed = window.confirm(
+      "Close your AthletiGolf account? This removes your app data and signs you out. You can sign up again with the same email once Supabase deletes the auth account."
+    );
+    if (!confirmed) return;
+
+    setClosingAccount(true);
+    setDataRequestState("saving");
+    setDataRequestMessage("");
+
+    const { error } = await supabase.functions.invoke("delete-account");
+    if (error) {
+      setClosingAccount(false);
+      setDataRequestState("error");
+      setDataRequestMessage(error.message || "Could not close the account. Check the delete-account Edge Function is deployed.");
+      return;
+    }
+
+    await supabase.auth.signOut();
+    navigate("/auth");
   }
 
   return (
@@ -411,12 +435,12 @@ export default function Settings() {
                   onChange={(e) => set("notifications_enabled", e.target.checked)}
                 />
                 <div
-                  className={`h-7 w-12 rounded-full transition-colors duration-200 ${
-                    profile.notifications_enabled ? "bg-pulse" : "bg-steel/20"
+                  className={`h-7 w-12 rounded-full border transition-colors duration-200 ${
+                    profile.notifications_enabled ? "border-pulse bg-pulse" : "border-steel/45 bg-steel/20"
                   }`}
                 />
                 <div
-                  className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-transform duration-200 ${
+                  className={`absolute top-1 h-5 w-5 rounded-full border border-white/70 bg-white shadow transition-transform duration-200 ${
                     profile.notifications_enabled ? "translate-x-6" : "translate-x-1"
                   }`}
                 />
@@ -425,58 +449,6 @@ export default function Settings() {
                 {profile.notifications_enabled ? "Notifications on" : "Notifications off"}
               </span>
             </label>
-          </div>
-
-          {/* NUTRITION DATA POLICY */}
-          <div className="rounded-xl border border-line bg-panel p-6 shadow-sm">
-            <div className="mb-6 flex items-start gap-3">
-              <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-pulse/10 text-pulse">
-                <Database className="h-5 w-5" />
-              </span>
-              <div>
-                <h2 className="text-2xl font-semibold text-dark">Nutrition Data Policy</h2>
-                <p className="mt-2 text-muted">
-                  How AthletiGolf uses USDA FoodData Central data, citation, estimates and source transparency.
-                </p>
-              </div>
-            </div>
-
-            <div className="grid gap-3 md:grid-cols-2">
-              <PrivacyNote
-                title="Public domain data"
-                detail="USDA FoodData Central data are public domain, not copyrighted and published under CC0, so no formal permission is required for use."
-              />
-              <PrivacyNote
-                title="Citation and acknowledgment"
-                detail="AthletiGolf labels USDA-sourced entries and acknowledges FoodData Central as the nutrition data source wherever USDA data is used."
-              />
-              <PrivacyNote
-                title="Source transparency"
-                detail="USDA entries keep their source and external food ID where available, so imported foods remain traceable back to FoodData Central."
-              />
-              <PrivacyNote
-                title="API responsibility"
-                detail="AthletiGolf keeps the USDA API key server-side, follows normal rate-limit expectations and does not expose the key in the app."
-              />
-              <div className="rounded-xl border border-line bg-white/70 p-4 md:col-span-2">
-                <p className="text-xs font-bold uppercase tracking-[0.16em] text-muted">USDA source notice</p>
-                <p className="mt-2 text-sm leading-relaxed text-muted">
-                  Nutrition data may include information from U.S. Department of Agriculture, Agricultural Research
-                  Service, Beltsville Human Nutrition Research Center. FoodData Central. Available from
-                  https://fdc.nal.usda.gov/. AthletiGolf uses USDA data for personal tracking and analysis only.
-                  Values remain estimates and may vary by brand, serving size, preparation method, formulation changes
-                  and user edits.
-                </p>
-              </div>
-              <div className="rounded-xl border border-line bg-white/70 p-4 md:col-span-2">
-                <p className="text-xs font-bold uppercase tracking-[0.16em] text-muted">Accuracy and claims</p>
-                <p className="mt-2 text-sm leading-relaxed text-muted">
-                  AthletiGolf does not present USDA values as medical advice, FDA approval, a nutrition label, or a
-                  guarantee of exact intake. Users should check product labels and adjust entries before relying on
-                  saved meals.
-                </p>
-              </div>
-            </div>
           </div>
 
           {/* BETA READINESS */}
@@ -610,14 +582,14 @@ export default function Settings() {
               <div>
                 <h2 className="text-2xl font-semibold text-dark">Data controls</h2>
                 <p className="mt-2 text-muted">
-                  Ask for a copy of your data or request account deletion during the beta.
+                  Ask for a copy of your data or close your account.
                 </p>
               </div>
             </div>
             <div className="flex flex-wrap gap-3">
               <button
                 type="button"
-                onClick={() => requestAccountDataAction("export")}
+                onClick={requestAccountDataExport}
                 disabled={dataRequestState === "saving"}
                 className="rounded-lg border border-line bg-white px-5 py-3 text-sm font-semibold text-dark transition hover:border-pulse/40 disabled:opacity-50"
               >
@@ -625,15 +597,15 @@ export default function Settings() {
               </button>
               <button
                 type="button"
-                onClick={() => requestAccountDataAction("deletion")}
-                disabled={dataRequestState === "saving"}
+                onClick={closeAccount}
+                disabled={closingAccount || dataRequestState === "saving"}
                 className="rounded-lg border border-danger/25 bg-danger/10 px-5 py-3 text-sm font-semibold text-danger transition hover:bg-danger/15 disabled:opacity-50"
               >
-                Request account deletion
+                {closingAccount ? "Closing account..." : "Close account"}
               </button>
             </div>
             <p className="mt-4 text-sm leading-relaxed text-muted">
-              These requests go to the feedback/admin inbox so they can be reviewed before anything permanent happens.
+              Export requests go to the feedback/admin inbox. Closing your account calls the secure account deletion flow immediately.
               You can also read the public <button type="button" onClick={() => navigate("/privacy")} className="font-semibold text-pulse">Privacy Policy</button> and <button type="button" onClick={() => navigate("/terms")} className="font-semibold text-pulse">Terms</button>.
             </p>
             {dataRequestState === "success" && <p className="mt-3 text-sm font-semibold text-emerald-600">{dataRequestMessage}</p>}

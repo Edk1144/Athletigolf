@@ -1,6 +1,5 @@
-import { Link } from "wouter";
 import { Database, ShieldCheck } from "lucide-react";
-import { SectionTitle, Surface } from "@/components/ui";
+import { PageHeader, SectionTitle, Surface } from "@/components/ui";
 
 const dataGroups = [
   {
@@ -23,25 +22,15 @@ const dataGroups = [
 
 export default function Privacy() {
   return (
-    <main className="min-h-screen bg-cream px-4 py-8 text-ink md:px-8 md:py-12">
+    <main className="min-h-screen bg-cream px-4 py-5 text-ink md:px-8 md:py-7">
       <div className="mx-auto max-w-5xl">
-        <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
-          <Link href="/" className="text-sm font-semibold text-pulse">AthletiGolf</Link>
-          <div className="flex gap-3 text-sm font-semibold">
-            <Link href="/terms" className="text-muted transition hover:text-dark">Terms</Link>
-            <Link href="/auth" className="text-muted transition hover:text-dark">Sign in</Link>
-          </div>
-        </div>
-
-        <section className="mb-6 rounded-2xl border border-white/10 bg-dark p-6 text-white shadow-sm md:p-8">
-          <p className="text-xs font-bold uppercase tracking-[0.22em] text-pulse">Beta Privacy Policy</p>
-          <h1 className="mt-4 text-3xl font-semibold tracking-tight md:text-5xl">Privacy at AthletiGolf</h1>
-          <p className="mt-4 max-w-3xl leading-relaxed text-white/68">
-            AthletiGolf is a beta performance platform. The app stores the data you log so your dashboard,
-            wellness, nutrition, cardio, golf, training and social features can work.
-          </p>
-          <p className="mt-3 text-sm font-semibold text-white/48">Last updated: 3 July 2026</p>
-        </section>
+        <PageHeader
+          eyebrow="Beta Privacy Policy"
+          title="Privacy at AthletiGolf"
+          description="AthletiGolf stores the data you log so your dashboard, wellness, nutrition, cardio, golf, training and social features can work."
+          tone="text-pulse"
+        />
+        <p className="mb-5 text-sm font-semibold text-muted">Last updated: 3 July 2026</p>
 
         <div className="grid gap-5">
           <Surface>
@@ -80,8 +69,8 @@ export default function Privacy() {
               admin feedback inbox so they can be reviewed before any permanent action is taken.
             </p>
             <div className="mt-5 flex flex-wrap gap-3">
-              <Link href="/settings" className="rounded-lg bg-pulse px-5 py-3 text-sm font-semibold text-white transition hover:bg-pulse/90">Open Settings</Link>
-              <Link href="/contact" className="rounded-lg border border-line bg-white px-5 py-3 text-sm font-semibold text-dark transition hover:border-pulse/40">Contact</Link>
+              <a href="/settings" className="rounded-lg bg-pulse px-5 py-3 text-sm font-semibold text-white transition hover:bg-pulse/90">Open Settings</a>
+              <a href="/contact" className="rounded-lg border border-line bg-white px-5 py-3 text-sm font-semibold text-dark transition hover:border-pulse/40">Contact</a>
             </div>
           </Surface>
         </div>

@@ -52,7 +52,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 function AppShell() {
   const [location, navigate] = useLocation();
   const { user } = useAuth();
-  const hideSidebar = location === "/" || location === "/auth" || location === "/onboarding" || location === "/privacy" || location === "/terms";
+  const hideSidebar = location === "/" || location === "/auth" || location === "/onboarding";
 
   useEffect(() => {
     applyTheme(getStoredTheme());

@@ -433,6 +433,30 @@ Security:
 - Users can manage their own live activity rows.
 - Users can select friends-visible active rows from accepted friends.
 
+### `feedback_reports`
+
+Purpose: beta feedback, bugs, feature ideas, support notes, and data export requests.
+
+Required columns:
+
+- `id uuid primary key`
+- `user_id uuid references auth.users(id) on delete set null`
+- `category text`
+- `title text`
+- `message text`
+- `page_url text`
+- `device_context text`
+- `status text default 'new'`
+- `deleted_at timestamptz`
+- `created_at timestamptz`
+- `updated_at timestamptz`
+
+Security:
+
+- Row Level Security enabled.
+- Authenticated users can insert and read their own feedback.
+- Admin users can read, update, soft-delete, restore, and permanently delete feedback.
+
 ## Required Functions
 
 ### `search_profiles_for_friend(search_query text)`
