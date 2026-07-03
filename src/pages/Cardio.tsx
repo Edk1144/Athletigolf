@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Activity, ExternalLink, Footprints, Link2, Route, Timer, Trash2, Watch } from "lucide-react";
+import { Activity, ExternalLink, Footprints, Link2, Route, ShieldCheck, Timer, Trash2, Watch } from "lucide-react";
 import { Button, EmptyState, FieldLabel, PageHeader, SelectInput, StatCard, Surface, TextArea, TextInput } from "@/components/ui";
 import { supabase } from "@/lib/supabase";
 import type { CardioSession } from "@/lib/types";
@@ -118,7 +118,7 @@ export default function Cardio() {
       <PageHeader
         eyebrow="Performance Lab"
         title="Cardio"
-        description="Track running and walking volume, keep easy aerobic work visible, and prepare the app for Strava sync."
+        description="Track running and walking volume, keep easy aerobic work visible, and prepare the app for compliant Strava sync."
         tone="text-lab"
         actions={
           stravaHref ? (
@@ -134,10 +134,10 @@ export default function Cardio() {
       />
 
       <section className="mb-5 grid gap-4 md:grid-cols-4">
-        <StatCard label="7-day distance" value={`${formatNumber(stats.weekDistance)} km`} tone="bg-white" />
-        <StatCard label="7-day time" value={`${stats.weekMinutes} min`} tone="bg-white" />
-        <StatCard label="Avg pace" value={stats.averagePace || "-"} tone="bg-white" />
-        <StatCard label="Sessions" value={sessions.length} tone="bg-white" />
+        <StatCard label="App 7-day distance" value={`${formatNumber(stats.weekDistance)} km`} tone="bg-white" sub="manual entries only" />
+        <StatCard label="App 7-day time" value={`${stats.weekMinutes} min`} tone="bg-white" sub="manual entries only" />
+        <StatCard label="App avg pace" value={stats.averagePace || "-"} tone="bg-white" sub="manual entries only" />
+        <StatCard label="Private sessions" value={sessions.length} tone="bg-white" />
       </section>
 
       <section className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr]">
@@ -194,15 +194,22 @@ export default function Cardio() {
                 <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#fc4c02]">Strava</p>
                 <h2 className="mt-1 text-2xl font-semibold">Device sync layer</h2>
                 <p className="mt-3 text-sm leading-relaxed text-white/65">
-                  Strava is the best first bridge because Apple Watch, Garmin and Samsung users can often push workouts there already.
+                  Strava can bridge runs and walks from watches, but imported data stays private to the connected user and is not used for AthletiAI, social sharing or product analytics.
                 </p>
               </div>
             </div>
 
             <div className="mt-5 grid gap-3 sm:grid-cols-3">
-              <DarkCard title="Imports" detail="Runs, walks, rides and workout metadata." />
-              <DarkCard title="Signals" detail="Distance, moving time, pace, heart rate and calories when available." />
-              <DarkCard title="Next" detail="Add OAuth credentials, then exchange tokens in a Supabase function." />
+              <DarkCard title="Consent" detail="Users connect with OAuth and can disconnect or request deletion." />
+              <DarkCard title="Scope" detail="Request only activity read access needed for run and walk imports." />
+              <DarkCard title="Privacy" detail="Imported Strava data is shown only to the connected user." />
+            </div>
+
+            <div className="mt-5 rounded-lg border border-white/10 bg-white/8 p-4">
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#fc4c02]">Compliance note</p>
+              <p className="mt-2 text-sm leading-relaxed text-white/65">
+                AthletiGolf should not train, tune, evaluate or ground AI systems with Strava data. It should not share Strava-derived activity data with friends or use it for cross-user analytics. Webhooks should be added before production sync so deauthorization, privacy changes and deleted activities are reflected promptly.
+              </p>
             </div>
 
             {stravaHref ? (
@@ -215,7 +222,7 @@ export default function Cardio() {
               </a>
             ) : (
               <p className="mt-5 rounded-lg border border-white/10 bg-white/8 p-3 text-sm text-white/65">
-                Add `VITE_STRAVA_CLIENT_ID` to enable the Strava connect button. A Supabase edge function should handle the secure token exchange before real sync goes live.
+                Add `VITE_STRAVA_CLIENT_ID` to enable the Strava connect button. A Supabase edge function should handle the secure token exchange, refresh tokens, deauthorization webhooks and deletion requests before real sync goes live.
               </p>
             )}
           </Surface>
@@ -230,7 +237,7 @@ export default function Cardio() {
               </div>
               <span className="inline-flex w-fit items-center gap-2 rounded-full bg-lab/10 px-3 py-1 text-xs font-bold text-lab">
                 <Route className="h-3.5 w-3.5" />
-                {formatNumber(stats.totalDistance)} km total
+                {formatNumber(stats.totalDistance)} km app total
               </span>
             </div>
 
@@ -256,6 +263,16 @@ export default function Cardio() {
                         <Mini label="Pace" value={formatPace(session.distance_km, session.duration_minutes)} />
                         <Mini label="HR" value={session.avg_heart_rate ? `${session.avg_heart_rate} bpm` : "-"} />
                       </div>
+                      {session.source === "strava" && session.external_id && (
+                        <a
+                          href={`https://www.strava.com/activities/${session.external_id}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-3 inline-flex text-sm font-bold text-[#fc4c02] underline"
+                        >
+                          View on Strava
+                        </a>
+                      )}
                     </div>
                     <Button type="button" variant="ghost" onClick={() => deleteSession(session.id)}>
                       <Trash2 className="h-4 w-4" />
@@ -286,6 +303,14 @@ export default function Cardio() {
               <Advice title="Easy runs" detail="Keep most running conversational so it supports training instead of stealing recovery." />
               <Advice title="Walking" detail="Useful for low-cost volume, recovery days and keeping daily movement honest." />
               <Advice title="Golf transfer" detail="Better aerobic base can help late-round focus, walking endurance and recovery between sessions." />
+            </div>
+            <div className="mt-5 rounded-xl border border-pulse/20 bg-pulse/8 p-4">
+              <div className="flex items-start gap-3">
+                <ShieldCheck className="mt-0.5 h-5 w-5 text-pulse" />
+                <p className="text-sm leading-relaxed text-muted">
+                  These balance notes use AthletiGolf manual/app-entered cardio only. Strava-imported activities should remain a private connected-account log unless Strava approves broader analysis.
+                </p>
+              </div>
             </div>
           </Surface>
         </div>
@@ -343,11 +368,12 @@ function Advice({ title, detail }: { title: string; detail: string }) {
 }
 
 function getCardioStats(sessions: CardioSession[]) {
+  const appSessions = sessions.filter((session) => session.source !== "strava");
   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-  const weekSessions = sessions.filter((session) => new Date(session.session_date) >= weekAgo);
+  const weekSessions = appSessions.filter((session) => new Date(session.session_date) >= weekAgo);
   const weekDistance = weekSessions.reduce((sum, session) => sum + (session.distance_km || 0), 0);
   const weekMinutes = weekSessions.reduce((sum, session) => sum + (session.duration_minutes || 0), 0);
-  const totalDistance = sessions.reduce((sum, session) => sum + (session.distance_km || 0), 0);
+  const totalDistance = appSessions.reduce((sum, session) => sum + (session.distance_km || 0), 0);
 
   return {
     weekDistance,
@@ -367,7 +393,8 @@ function getStravaAuthorizeUrl() {
     response_type: "code",
     redirect_uri: redirect,
     approval_prompt: "auto",
-    scope: "read,activity:read_all",
+    scope: "activity:read",
+    state: "athletigolf-cardio",
   });
 
   return `https://www.strava.com/oauth/authorize?${params.toString()}`;

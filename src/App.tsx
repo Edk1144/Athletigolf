@@ -5,6 +5,8 @@ import { supabase } from "@/lib/supabase";
 import MobileSidebar from "@/components/MobileSidebar";
 import Landing from "@/pages/Landing";
 import AuthPage from "@/pages/Auth";
+import Privacy from "@/pages/Privacy";
+import Terms from "@/pages/Terms";
 import Dashboard from "@/pages/Dashboard";
 import Onboarding from "@/pages/Onboarding";
 import Profile from "@/pages/Profile";
@@ -50,7 +52,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 function AppShell() {
   const [location, navigate] = useLocation();
   const { user } = useAuth();
-  const hideSidebar = location === "/" || location === "/auth" || location === "/onboarding";
+  const hideSidebar = location === "/" || location === "/auth" || location === "/onboarding" || location === "/privacy" || location === "/terms";
 
   useEffect(() => {
     applyTheme(getStoredTheme());
@@ -76,7 +78,7 @@ function AppShell() {
   }, [user]);
 
   useEffect(() => {
-    if (!user || location === "/auth" || location === "/" || location === "/onboarding") return;
+    if (!user || location === "/auth" || location === "/" || location === "/onboarding" || location === "/privacy" || location === "/terms") return;
 
     let cancelled = false;
 
@@ -111,6 +113,8 @@ function AppShell() {
 
       <Route path="/" component={Landing} />
       <Route path="/auth" component={AuthPage} />
+      <Route path="/privacy" component={Privacy} />
+      <Route path="/terms" component={Terms} />
 
       <Route path="/onboarding">
         <ProtectedRoute>

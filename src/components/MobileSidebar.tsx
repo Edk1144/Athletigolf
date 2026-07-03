@@ -11,6 +11,7 @@ import {
   Dumbbell,
   Flag,
   Footprints,
+  FileText,
   History,
   Instagram,
   LayoutDashboard,
@@ -66,6 +67,8 @@ const golfLinks: NavItem[] = [
 const supportLinks: NavItem[] = [
   { href: "/settings", label: "Settings", icon: Settings },
   { href: "/contact", label: "Contact", icon: Mail },
+  { href: "/privacy", label: "Privacy", icon: ShieldCheck },
+  { href: "/terms", label: "Terms", icon: FileText },
   { href: "/admin/feedback", label: "Admin Feedback", icon: ShieldCheck, adminOnly: true },
   { href: "/follow", label: "Follow", icon: Instagram },
 ];
@@ -91,6 +94,8 @@ const titles: Record<string, { title: string; section: string }> = {
   "/golf/practice-history": { title: "Practice History", section: "Golf" },
   "/settings": { title: "Settings", section: "System" },
   "/contact": { title: "Contact", section: "Support" },
+  "/privacy": { title: "Privacy", section: "Trust" },
+  "/terms": { title: "Terms", section: "Trust" },
   "/follow": { title: "Follow", section: "Community" },
 };
 

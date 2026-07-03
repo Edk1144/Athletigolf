@@ -122,6 +122,16 @@ export default function Landing() {
           </div>
         </div>
       </section>
+
+      <footer className="border-t border-line px-4 py-6 md:px-8">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 text-sm text-muted">
+          <span>AthletiGolf beta</span>
+          <div className="flex gap-4 font-semibold">
+            <a href="/privacy" className="transition hover:text-dark">Privacy</a>
+            <a href="/terms" className="transition hover:text-dark">Terms</a>
+          </div>
+        </div>
+      </footer>
     </main>
   );
 }

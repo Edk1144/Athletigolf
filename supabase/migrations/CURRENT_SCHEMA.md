@@ -5,6 +5,7 @@ needs to support the app. It is not a migration and should not be pasted into
 Supabase SQL editor.
 
 Use this when Bolt asks what database capabilities are needed.
+For deploy checks and smoke tests, use `DEPLOYMENT_CHECKLIST.md` in this same folder.
 
 ## Important Rule
 
@@ -259,6 +260,11 @@ Security:
 
 - Row Level Security enabled.
 - Users can only access rows where `auth.uid() = user_id`.
+- Strava-imported rows must be shown only to the authenticated user who
+  connected Strava. They must not be used for social sharing, AthletiAI/AI
+  training, cross-user analytics, advertising, or product-improvement datasets.
+- Production Strava sync must support user disconnect/deletion requests and
+  Strava deauthorization/deletion webhooks before importing real user data.
 
 ### `daily_wellness_logs`
 

@@ -23,6 +23,8 @@ export default function Settings() {
   const [loading, setLoading] = useState(true);
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [errorMessage, setErrorMessage] = useState("");
+  const [dataRequestState, setDataRequestState] = useState<SaveState>("idle");
+  const [dataRequestMessage, setDataRequestMessage] = useState("");
 
   const [profile, setProfile] = useState({
     full_name: "",
@@ -181,6 +183,38 @@ export default function Settings() {
 
     setSaveState("success");
     setTimeout(() => setSaveState("idle"), 3000);
+  }
+
+  async function requestAccountDataAction(action: "export" | "deletion") {
+    setDataRequestState("saving");
+    setDataRequestMessage("");
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      navigate("/auth");
+      return;
+    }
+
+    const title = action === "export" ? "Account data export request" : "Account data deletion request";
+    const { error } = await supabase.from("feedback_reports").insert({
+      user_id: user.id,
+      category: "other",
+      title,
+      message: `${title} from ${user.email || "unknown email"} (${user.id}). Please verify identity before actioning.`,
+      page_url: "/settings",
+      device_context: navigator.userAgent,
+      status: "new",
+    });
+
+    if (error) {
+      setDataRequestState("error");
+      setDataRequestMessage(error.message || "Could not send the request. Please use Contact instead.");
+      return;
+    }
+
+    setDataRequestState("success");
+    setDataRequestMessage(action === "export" ? "Export request sent." : "Deletion request sent.");
+    setTimeout(() => setDataRequestState("idle"), 5000);
   }
 
   return (
@@ -445,6 +479,28 @@ export default function Settings() {
             </div>
           </div>
 
+          {/* BETA READINESS */}
+          <div className="rounded-xl border border-line bg-panel p-6 shadow-sm">
+            <div className="mb-6 flex items-start gap-3">
+              <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-lab/10 text-lab">
+                <Database className="h-5 w-5" />
+              </span>
+              <div>
+                <h2 className="text-2xl font-semibold text-dark">Beta readiness</h2>
+                <p className="mt-2 text-muted">
+                  Before testing in Bolt or Supabase, these database pieces should be applied and checked.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <PrivacyNote title="Social usernames" detail="Profiles need username, username search, display-name search settings, and friend-search functions." />
+              <PrivacyNote title="Wellness nutrition" detail="Nutrition entries and saved foods need source IDs, per-100g macros, saturated fat, sugars and serving grams." />
+              <PrivacyNote title="Cardio logs" detail="The cardio_sessions table powers run and walk tracking, with Strava imports kept private." />
+              <PrivacyNote title="Feedback inbox" detail="feedback_reports and notifications let testers report bugs and request data export or deletion." />
+            </div>
+          </div>
+
           {/* PRIVACY */}
           <div className="rounded-xl border border-line bg-panel p-6 shadow-sm">
             <div className="mb-6 flex items-start gap-3">
@@ -532,6 +588,8 @@ export default function Settings() {
                 <PrivacyNote title="Training logs" detail="Private to your account." />
                 <PrivacyNote title="Wellness logs" detail="Private to your account." />
                 <PrivacyNote title="Live check-ins" detail="Private or accepted friends only." />
+                <PrivacyNote title="Strava imports" detail="Private to your account only. Not used for AthletiAI, social sharing, advertising, or cross-user analytics." />
+                <PrivacyNote title="AthletiAI" detail="Uses rule-based reads of your AthletiGolf logs. It is not medical, nutrition, injury, or professional coaching advice." />
                 <div className="rounded-xl border border-line bg-white/70 p-4 md:col-span-2">
                   <p className="text-xs font-bold uppercase tracking-[0.16em] text-muted">Alpha privacy notice</p>
                   <p className="mt-2 text-sm leading-relaxed text-muted">
@@ -541,6 +599,45 @@ export default function Settings() {
                 </div>
               </div>
             </div>
+          </div>
+
+          {/* DATA CONTROLS */}
+          <div className="rounded-xl border border-line bg-panel p-6 shadow-sm">
+            <div className="mb-5 flex items-start gap-3">
+              <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-pulse/10 text-pulse">
+                <ShieldCheck className="h-5 w-5" />
+              </span>
+              <div>
+                <h2 className="text-2xl font-semibold text-dark">Data controls</h2>
+                <p className="mt-2 text-muted">
+                  Ask for a copy of your data or request account deletion during the beta.
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={() => requestAccountDataAction("export")}
+                disabled={dataRequestState === "saving"}
+                className="rounded-lg border border-line bg-white px-5 py-3 text-sm font-semibold text-dark transition hover:border-pulse/40 disabled:opacity-50"
+              >
+                Request data export
+              </button>
+              <button
+                type="button"
+                onClick={() => requestAccountDataAction("deletion")}
+                disabled={dataRequestState === "saving"}
+                className="rounded-lg border border-danger/25 bg-danger/10 px-5 py-3 text-sm font-semibold text-danger transition hover:bg-danger/15 disabled:opacity-50"
+              >
+                Request account deletion
+              </button>
+            </div>
+            <p className="mt-4 text-sm leading-relaxed text-muted">
+              These requests go to the feedback/admin inbox so they can be reviewed before anything permanent happens.
+              You can also read the public <button type="button" onClick={() => navigate("/privacy")} className="font-semibold text-pulse">Privacy Policy</button> and <button type="button" onClick={() => navigate("/terms")} className="font-semibold text-pulse">Terms</button>.
+            </p>
+            {dataRequestState === "success" && <p className="mt-3 text-sm font-semibold text-emerald-600">{dataRequestMessage}</p>}
+            {dataRequestState === "error" && <p className="mt-3 text-sm font-semibold text-danger">{dataRequestMessage}</p>}
           </div>
 
           {/* ONBOARDING */}
