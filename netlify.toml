@@ -5,3 +5,8 @@
 [build.environment]
   NODE_VERSION = "20"
   VITE_STRAVA_CLIENT_ID = "262702"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
