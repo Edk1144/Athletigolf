@@ -16,20 +16,20 @@ export function Button({
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: ButtonVariant }) {
   const variants: Record<ButtonVariant, string> = {
-    primary: "bg-dark text-white hover:bg-steel",
-    secondary: "border border-line bg-panel text-ink hover:border-steel/25 hover:bg-white",
+    primary: "bg-dark text-white shadow-[0_14px_34px_rgba(7,10,15,0.18)] hover:bg-steel",
+    secondary: "border border-line bg-panel text-ink shadow-sm hover:border-pulse/40 hover:bg-white",
     danger: "bg-danger text-white hover:bg-danger/90",
     ghost: "text-muted hover:bg-steel/5 hover:text-ink",
-    golf: "bg-golf text-white hover:bg-golf/90",
-    gym: "bg-lab text-white hover:bg-lab/90",
-    gold: "bg-gold text-dark hover:bg-gold/90",
-    pulse: "bg-pulse text-white hover:bg-pulse/90",
+    golf: "bg-golf text-white shadow-[0_14px_34px_rgba(18,116,81,0.18)] hover:bg-golf/90",
+    gym: "bg-lab text-white shadow-[0_14px_34px_rgba(49,88,255,0.18)] hover:bg-lab/90",
+    gold: "bg-gold text-dark shadow-[0_14px_34px_rgba(215,180,90,0.22)] hover:bg-gold/90",
+    pulse: "bg-pulse text-dark shadow-[0_14px_34px_rgba(19,200,203,0.22)] hover:bg-pulse/90",
   };
 
   return (
     <button
       className={cn(
-        "inline-flex min-h-10 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50",
+        "inline-flex min-h-10 items-center justify-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-semibold transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:translate-y-0 disabled:opacity-50",
         variants[variant],
         className
       )}
@@ -41,7 +41,7 @@ export function Button({
 export function Card({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn("rounded-xl border border-line bg-panel p-5 shadow-sm", className)}
+      className={cn("rounded-3xl border border-line bg-panel p-5 shadow-[0_20px_55px_rgba(11,17,23,0.07)]", className)}
       {...props}
     />
   );
@@ -97,7 +97,7 @@ export function StatCard({
 export function Surface({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
     <section
-      className={cn("rounded-xl border border-line bg-panel p-5 shadow-sm", className)}
+      className={cn("rounded-3xl border border-line bg-panel p-5 shadow-[0_20px_55px_rgba(11,17,23,0.07)]", className)}
       {...props}
     />
   );
@@ -133,7 +133,7 @@ export function EmptyState({
   action?: ReactNode;
 }) {
   return (
-    <div className="rounded-xl border border-dashed border-line bg-white/55 p-8 text-center">
+    <div className="rounded-3xl border border-dashed border-line bg-white/65 p-8 text-center">
       <h3 className="text-lg font-semibold text-dark">{title}</h3>
       <p className="mx-auto mt-2 max-w-lg text-sm leading-relaxed text-muted">{description}</p>
       {action && <div className="mt-5 flex justify-center">{action}</div>}
@@ -170,7 +170,7 @@ export function ConfirmDialog({
         onClick={onCancel}
         aria-label={cancelLabel}
       />
-      <div className="relative z-10 w-full max-w-md rounded-xl border border-line bg-panel p-6 shadow-2xl">
+      <div className="relative z-10 w-full max-w-md rounded-3xl border border-line bg-panel p-6 shadow-2xl">
         <h2 className="text-2xl font-semibold text-dark">{title}</h2>
         <p className="mt-3 text-sm leading-relaxed text-muted">{description}</p>
         <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
@@ -194,7 +194,7 @@ export function TextInput({ className, ...props }: InputHTMLAttributes<HTMLInput
   return (
     <input
       className={cn(
-        "w-full rounded-lg border border-line bg-white px-4 py-3 text-sm outline-none transition placeholder:text-muted/60 focus:border-pulse/50 focus:ring-4 focus:ring-pulse/10",
+        "w-full rounded-2xl border border-line bg-white px-4 py-3 text-sm outline-none transition placeholder:text-muted/60 focus:border-pulse/60 focus:ring-4 focus:ring-pulse/15",
         className
       )}
       {...props}
@@ -206,7 +206,7 @@ export function TextArea({ className, ...props }: TextareaHTMLAttributes<HTMLTex
   return (
     <textarea
       className={cn(
-        "w-full rounded-lg border border-line bg-white px-4 py-3 text-sm outline-none transition placeholder:text-muted/60 focus:border-pulse/50 focus:ring-4 focus:ring-pulse/10",
+        "w-full rounded-2xl border border-line bg-white px-4 py-3 text-sm outline-none transition placeholder:text-muted/60 focus:border-pulse/60 focus:ring-4 focus:ring-pulse/15",
         className
       )}
       {...props}
@@ -218,7 +218,7 @@ export function SelectInput({ className, ...props }: SelectHTMLAttributes<HTMLSe
   return (
     <select
       className={cn(
-        "w-full rounded-lg border border-line bg-white px-4 py-3 text-sm outline-none transition focus:border-pulse/50 focus:ring-4 focus:ring-pulse/10 disabled:bg-black/5 disabled:text-black/35",
+        "w-full rounded-2xl border border-line bg-white px-4 py-3 text-sm outline-none transition focus:border-pulse/60 focus:ring-4 focus:ring-pulse/15 disabled:bg-black/5 disabled:text-black/35",
         className
       )}
       {...props}

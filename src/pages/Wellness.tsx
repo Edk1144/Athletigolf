@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { Activity, CalendarDays, ChevronLeft, ChevronRight, Copy, Database, Flame, Moon, Pencil, Plus, Scale, Search, Trash2, Utensils, Zap } from "lucide-react";
 import { Button, EmptyState, FieldLabel, PageHeader, SelectInput, Surface, TextArea, TextInput } from "@/components/ui";
 import { supabase } from "@/lib/supabase";
@@ -1495,7 +1495,7 @@ function NutritionDashboard({
         </span>
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-[220px_1fr] lg:items-center">
+      <div className="grid gap-5 md:grid-cols-[180px_1fr] lg:grid-cols-[220px_1fr] lg:items-center">
         <MacroPie nutrition={nutrition} />
         <div className="space-y-3">
           <CalorieBalanceBar calories={nutrition.calories || 0} target={targets.calories} delta={calorieDelta} />
@@ -1522,11 +1522,11 @@ function MacroPie({ nutrition }: { nutrition: NutritionDetail }) {
       : `conic-gradient(rgb(22 163 74) 0 ${proteinShare}%, rgb(0 180 216) ${proteinShare}% ${proteinShare + carbShare}%, rgb(212 175 55) ${proteinShare + carbShare}% 100%)`;
 
   return (
-    <div className="flex flex-col items-center rounded-xl border border-line bg-white/70 p-4 text-center">
-      <div className="relative h-44 w-44 rounded-full" style={{ background: gradient }}>
-        <div className="absolute inset-6 flex flex-col items-center justify-center rounded-full bg-panel">
+    <div className="mx-auto flex w-full max-w-[240px] flex-col items-center rounded-xl border border-line bg-white/70 p-4 text-center md:max-w-none">
+      <div className="relative h-36 w-36 rounded-full sm:h-44 sm:w-44" style={{ background: gradient }}>
+        <div className="absolute inset-5 flex flex-col items-center justify-center rounded-full bg-panel sm:inset-6">
           <span className="text-xs font-bold uppercase tracking-[0.14em] text-muted">Calories</span>
-          <span className="mt-1 text-3xl font-semibold text-dark">{formatNumber(nutrition.calories)}</span>
+          <span className="mt-1 text-2xl font-semibold text-dark sm:text-3xl">{formatNumber(nutrition.calories)}</span>
         </div>
       </div>
       <div className="mt-4 grid w-full grid-cols-3 gap-2 text-xs font-semibold text-muted">
@@ -2287,3 +2287,4 @@ function formatShortDay(value: string) {
     weekday: "short",
   });
 }
+

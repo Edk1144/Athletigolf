@@ -40,13 +40,12 @@ type NavItem = {
 };
 
 const mainLinks: NavItem[] = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, tone: "pulse" },
   { href: "/analytics", label: "Analytics", icon: BarChart3, tone: "gold" },
   { href: "/athletiai", label: "AthletiAI", icon: Brain, tone: "pulse" },
   { href: "/wellness", label: "Wellness", icon: Droplets, tone: "pulse" },
   { href: "/social", label: "Social", icon: Users, tone: "pulse" },
-  { href: "/profile", label: "Profile", icon: User },
-  { href: "/memberships", label: "Memberships", icon: CreditCard },
+  { href: "/profile", label: "Profile", icon: User, tone: "pulse" },
 ];
 
 const trainingLinks: NavItem[] = [
@@ -67,6 +66,7 @@ const golfLinks: NavItem[] = [
 
 const supportLinks: NavItem[] = [
   { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/memberships", label: "Memberships", icon: CreditCard },
   { href: "/contact", label: "Contact", icon: Mail },
   { href: "/privacy", label: "Privacy", icon: ShieldCheck },
   { href: "/terms", label: "Terms", icon: FileText },
@@ -143,7 +143,7 @@ export default function MobileSidebar() {
 
   return (
     <>
-      <aside className="fixed inset-y-0 left-0 z-40 hidden w-72 flex-col border-r border-white/10 bg-dark text-white lg:flex">
+      <aside className="fixed inset-y-0 left-0 z-40 hidden w-72 flex-col border-r border-white/10 bg-[radial-gradient(circle_at_18%_0%,rgba(19,200,203,0.16),transparent_30%),linear-gradient(180deg,#070a0f_0%,#101922_50%,#070a0f_100%)] text-white lg:flex">
         <NavContent
           trainingOpen={trainingOpen}
           setTrainingOpen={setTrainingOpen}
@@ -157,7 +157,7 @@ export default function MobileSidebar() {
         />
       </aside>
 
-      <header className="fixed left-0 right-0 top-0 z-30 border-b border-line bg-cream/82 backdrop-blur-xl lg:left-72">
+      <header className="fixed left-0 right-0 top-0 z-30 border-b border-line bg-panel/88 backdrop-blur-xl lg:left-72">
         <div className="flex h-20 items-center justify-between gap-4 px-4 md:px-8">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
@@ -200,7 +200,7 @@ export default function MobileSidebar() {
             className="absolute inset-0 bg-black/50"
             aria-label="Close navigation"
           />
-          <aside className="relative ml-auto flex h-full w-80 max-w-[90vw] flex-col bg-dark text-white shadow-2xl">
+          <aside className="relative ml-auto flex h-full w-80 max-w-[90vw] flex-col bg-[radial-gradient(circle_at_18%_0%,rgba(19,200,203,0.16),transparent_30%),linear-gradient(180deg,#070a0f_0%,#101922_50%,#070a0f_100%)] text-white shadow-2xl">
             <NavContent
               trainingOpen={trainingOpen}
               setTrainingOpen={setTrainingOpen}
@@ -258,7 +258,7 @@ function NavContent({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col p-5">
-      <div className="mb-6 flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+      <div className="mb-6 flex items-center justify-between gap-4 rounded-3xl border border-white/10 bg-white/[0.055] p-4 shadow-[0_18px_48px_rgba(0,0,0,0.18)]">
         <div>
           <div className="flex items-center gap-2">
             <img
@@ -289,7 +289,7 @@ function NavContent({
         </div>
 
         <div className="mt-6 space-y-4 border-t border-white/10 pt-4">
-          <div className="rounded-2xl border border-pulse/20 bg-pulse/10 p-4">
+          <div className="rounded-3xl border border-pulse/20 bg-[linear-gradient(135deg,rgba(19,200,203,0.15),rgba(215,180,90,0.1))] p-4">
             <p className="text-sm font-semibold text-pulse">Build the week</p>
             <p className="mt-1 text-sm leading-relaxed text-white/65">
               {trainingOnly
@@ -353,7 +353,7 @@ function MenuLink({
         compact ? "py-2.5 text-sm" : "py-3 text-sm font-semibold"
       } ${
         isActive
-          ? "bg-white text-dark shadow-sm"
+          ? "bg-pulse text-dark shadow-[0_12px_30px_rgba(19,200,203,0.22)]"
           : `${toneClass} hover:bg-white/10 hover:text-white`
       }`}
     >
@@ -375,7 +375,7 @@ function Dropdown({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-2">
+    <div className="rounded-3xl border border-white/10 bg-white/[0.035] p-2">
       <button
         onClick={() => setOpen(!open)}
         className="flex w-full items-center justify-between rounded-lg px-3 py-3 text-left text-sm font-semibold text-white/85 transition hover:bg-white/10 hover:text-white"
@@ -484,7 +484,7 @@ function NotificationBell({ compact = false }: { compact?: boolean }) {
       <button
         type="button"
         onClick={refreshAndToggleOpen}
-        className={`relative inline-flex items-center justify-center rounded-lg border border-line bg-panel text-dark shadow-sm transition hover:border-pulse/35 hover:text-pulse ${
+        className={`relative inline-flex items-center justify-center rounded-2xl border border-line bg-panel text-dark shadow-sm transition hover:border-pulse/45 hover:text-pulse ${
           compact ? "h-11 w-11" : "h-11 w-11"
         }`}
         aria-label="Open notifications"
@@ -498,7 +498,7 @@ function NotificationBell({ compact = false }: { compact?: boolean }) {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-12 z-50 w-[min(360px,calc(100vw-2rem))] overflow-hidden rounded-xl border border-line bg-panel shadow-2xl">
+        <div className="absolute right-0 top-12 z-50 w-[min(360px,calc(100vw-2rem))] overflow-hidden rounded-3xl border border-line bg-panel shadow-2xl">
           <div className="flex items-center justify-between border-b border-line p-4">
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.16em] text-muted">Notifications</p>
@@ -560,3 +560,6 @@ function formatNotificationDate(value: string) {
     minute: "2-digit",
   }).format(new Date(value));
 }
+
+
+

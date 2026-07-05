@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { ArrowUpRight, BarChart3, Brain, Dumbbell, Flag, Target } from "lucide-react";
 import { Button, EmptyState, SectionTitle, Surface } from "@/components/ui";
@@ -398,9 +398,9 @@ function ScoreLineChart({ rounds }: { rounds: Round[] }) {
   const lower = Math.max(0, Math.floor(bestScore - 2));
   const upper = Math.ceil(worstScore + 2);
   const range = upper - lower || 1;
-  const width = Math.max(760, rounds.length * 92);
-  const height = 330;
-  const padding = { top: 34, right: 34, bottom: 58, left: 48 };
+  const width = Math.max(560, rounds.length * 74);
+  const height = 300;
+  const padding = { top: 30, right: 28, bottom: 52, left: 42 };
   const plotWidth = width - padding.left - padding.right;
   const plotHeight = height - padding.top - padding.bottom;
   const points = rounds.map((round, index) => {
@@ -433,7 +433,7 @@ function ScoreLineChart({ rounds }: { rounds: Round[] }) {
       <div className="overflow-x-auto">
         <svg
           viewBox={`0 0 ${width} ${height}`}
-          className="h-[330px] min-w-full"
+          className="h-[240px] min-w-[520px] sm:h-[280px] sm:min-w-full lg:h-[330px]"
           role="img"
           aria-label="Recent round score line chart"
         >
@@ -649,3 +649,4 @@ function MuscleBalance({ item, max }: { item: { muscle: string; volume: number }
 function formatDistance(value: number | null) {
   return value === null ? "-" : `${Math.round(value)} yd`;
 }
+

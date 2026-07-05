@@ -19,7 +19,7 @@ const features = [
 export default function Landing() {
   return (
     <main className="min-h-screen bg-cream text-ink">
-      <nav className="fixed inset-x-0 top-0 z-30 border-b border-white/10 bg-dark/90 px-4 py-3 text-white backdrop-blur md:px-8">
+      <nav className="fixed inset-x-0 top-0 z-30 border-b border-white/10 bg-dark/92 px-4 py-3 text-white backdrop-blur md:px-8">
         <div className="mx-auto flex max-w-7xl items-center justify-between">
           <a href="/" className="inline-flex items-center gap-2 text-lg font-semibold tracking-tight">
             <img src={athletiGolfLogo} alt="" className="h-8 w-8 object-contain" aria-hidden="true" />
@@ -30,7 +30,7 @@ export default function Landing() {
             <a href="#modules" className="transition hover:text-white">Modules</a>
             <a href="#plans" className="transition hover:text-white">Plans</a>
           </div>
-          <a href="/auth" className="rounded-lg bg-pulse px-4 py-2 text-sm font-semibold text-dark transition hover:bg-pulse/85">
+          <a href="/auth" className="rounded-2xl bg-pulse px-4 py-2 text-sm font-semibold text-dark shadow-[0_12px_28px_rgba(19,200,203,0.22)] transition hover:-translate-y-0.5 hover:bg-pulse/85">
             Get Started
           </a>
         </div>
@@ -42,10 +42,10 @@ export default function Landing() {
           alt="Golfer hitting a shot"
           className="absolute inset-0 h-full w-full object-cover object-[24%_36%] opacity-90"
         />
-        <div className="absolute inset-0 bg-gradient-to-r from-dark/8 via-dark/28 to-dark/92" />
+        <div className="absolute inset-0 bg-gradient-to-r from-dark/8 via-dark/36 to-dark/94" />
         <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-dark/60 to-transparent" />
         <div className="relative mx-auto flex min-h-[calc(92vh-4rem)] max-w-7xl flex-col items-start justify-center px-4 py-20 md:items-end md:px-8">
-          <div className="max-w-2xl rounded-xl border border-white/10 bg-dark/32 p-5 backdrop-blur-[2px] md:bg-transparent md:p-0 md:text-right md:backdrop-blur-0">
+          <div className="max-w-2xl rounded-3xl border border-white/10 bg-dark/38 p-5 backdrop-blur-[2px] md:bg-transparent md:p-0 md:text-right md:backdrop-blur-0">
           <div className="mb-5 inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.22em] text-pulse md:justify-end">
             <img src={athletiGolfLogo} alt="" className="h-9 w-9 object-contain" aria-hidden="true" />
             Golf x athletic performance
@@ -57,10 +57,10 @@ export default function Landing() {
             Track your golf, training, practice and progress in one connected command centre.
           </p>
           <div className="mt-9 flex flex-wrap gap-3 md:justify-end">
-            <a href="/auth" className="rounded-lg bg-pulse px-6 py-3 font-semibold text-dark transition hover:bg-pulse/85">
+            <a href="/auth" className="rounded-2xl bg-pulse px-6 py-3 font-semibold text-dark shadow-[0_12px_30px_rgba(19,200,203,0.24)] transition hover:-translate-y-0.5 hover:bg-pulse/85">
               Get Started
             </a>
-            <a href="#system" className="rounded-lg border border-white/15 bg-white/8 px-6 py-3 font-semibold text-white transition hover:bg-white/14">
+            <a href="#system" className="rounded-2xl border border-white/15 bg-white/8 px-6 py-3 font-semibold text-white transition hover:-translate-y-0.5 hover:bg-white/14">
               Explore Platform
             </a>
           </div>
@@ -68,7 +68,7 @@ export default function Landing() {
 
           <div className="mt-12 grid max-w-3xl gap-3 sm:grid-cols-3 md:self-end">
             {modules.map((module) => (
-              <div key={module.label} className="rounded-lg border border-white/10 bg-white/10 p-4 backdrop-blur">
+              <div key={module.label} className="rounded-2xl border border-white/10 bg-white/10 p-4 backdrop-blur">
                 <p className="text-xs uppercase tracking-[0.16em] text-white/45">{module.label}</p>
                 <p className="mt-3 text-sm font-semibold text-white/85">{module.value}</p>
               </div>
@@ -88,7 +88,7 @@ export default function Landing() {
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             {features.map((feature) => (
-              <div key={feature} className="rounded-lg border border-line bg-panel p-5 shadow-sm">
+              <div key={feature} className="rounded-3xl border border-line bg-panel p-5 shadow-[0_20px_55px_rgba(11,17,23,0.07)]">
                 <span className="mb-4 block h-1.5 w-10 rounded-full bg-pulse" />
                 <p className="font-semibold text-dark">{feature}</p>
               </div>
@@ -97,14 +97,14 @@ export default function Landing() {
         </div>
       </section>
 
-      <section id="modules" className="bg-dark px-4 py-16 text-white md:px-8">
+      <section id="modules" className="bg-[radial-gradient(circle_at_12%_0%,rgba(19,200,203,0.16),transparent_28%),linear-gradient(135deg,#070a0f_0%,#101922_58%,#040608_100%)] px-4 py-16 text-white md:px-8">
         <div className="mx-auto grid max-w-7xl gap-5 lg:grid-cols-3">
           {[
             ["Golf Form", "Review scoring, greens, fairways, short game and putting in one clean flow."],
             ["Performance Lab", "Plan training days, log work quickly and watch strength trends build."],
             ["Insight Layer", "Turn the relationship between training and golf stats into clear next actions."],
           ].map(([title, text]) => (
-            <article key={title} className="rounded-xl border border-white/10 bg-white/8 p-7">
+            <article key={title} className="rounded-3xl border border-white/10 bg-white/8 p-7">
               <p className="mb-3 text-xs font-bold uppercase tracking-[0.18em] text-pulse">Module</p>
               <h3 className="text-2xl font-semibold">{title}</h3>
               <p className="mt-4 leading-relaxed text-white/62">{text}</p>
@@ -114,7 +114,7 @@ export default function Landing() {
       </section>
 
       <section id="plans" className="px-4 py-16 md:px-8">
-        <div className="mx-auto max-w-7xl rounded-xl border border-line bg-panel p-8 shadow-sm md:p-10">
+        <div className="mx-auto max-w-7xl rounded-3xl border border-line bg-panel p-8 shadow-[0_20px_55px_rgba(11,17,23,0.07)] md:p-10">
           <p className="text-xs font-bold uppercase tracking-[0.18em] text-pulse">Early access</p>
           <div className="mt-4 grid gap-6 md:grid-cols-[1fr_auto] md:items-end">
             <div>
@@ -123,7 +123,7 @@ export default function Landing() {
                 Payments and premium analytics can sit on top later. The product already needs the daily workflow to feel serious.
               </p>
             </div>
-            <a href="/auth" className="rounded-lg bg-dark px-6 py-3 text-center font-semibold text-white transition hover:-translate-y-0.5">
+            <a href="/auth" className="rounded-2xl bg-dark px-6 py-3 text-center font-semibold text-white transition hover:-translate-y-0.5">
               Create Account
             </a>
           </div>

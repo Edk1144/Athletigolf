@@ -41,11 +41,11 @@ export default function AuthPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-cream px-4 py-8">
-      <div className="grid w-full max-w-5xl overflow-hidden rounded-xl border border-line bg-panel shadow-2xl lg:grid-cols-[1.05fr_0.95fr]">
+      <div className="grid w-full max-w-5xl overflow-hidden rounded-3xl border border-line bg-panel shadow-[0_30px_90px_rgba(11,17,23,0.16)] lg:grid-cols-[1.05fr_0.95fr]">
         <section className="relative flex min-h-[520px] flex-col justify-between overflow-hidden bg-dark p-8 text-white md:p-12">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_15%,rgba(0,166,200,0.28),transparent_34%),radial-gradient(circle_at_80%_80%,rgba(65,87,216,0.24),transparent_38%)]" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_12%,rgba(19,200,203,0.34),transparent_32%),radial-gradient(circle_at_82%_78%,rgba(215,180,90,0.18),transparent_34%),linear-gradient(135deg,#070a0f_0%,#101922_55%,#040608_100%)]" />
           <div className="relative">
-            <div className="mb-8 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/8 px-4 py-2 text-xs font-bold uppercase tracking-[0.16em] text-pulse">
+            <div className="mb-8 inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/8 px-4 py-2 text-xs font-bold uppercase tracking-[0.16em] text-pulse">
               <img
                 src={athletiGolfLogo}
                 alt=""
@@ -64,7 +64,7 @@ export default function AuthPage() {
 
           <div className="relative grid gap-3 sm:grid-cols-3">
             {["Rounds", "Training", "Insights"].map((item) => (
-              <div key={item} className="rounded-lg border border-white/10 bg-white/8 p-4">
+              <div key={item} className="rounded-2xl border border-white/10 bg-white/8 p-4">
                 <p className="text-xs uppercase tracking-[0.16em] text-white/40">Module</p>
                 <p className="mt-2 font-semibold">{item}</p>
               </div>
