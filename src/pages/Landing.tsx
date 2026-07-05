@@ -1,4 +1,5 @@
 import heroGolf from "../assets/hero-golf.jpg";
+import athletiGolfLogo from "@/assets/athletigolf-logo-transparent.png";
 
 const modules = [
   { label: "Golf Form", value: "Score, GIR, scrambling, putting" },
@@ -20,7 +21,10 @@ export default function Landing() {
     <main className="min-h-screen bg-cream text-ink">
       <nav className="fixed inset-x-0 top-0 z-30 border-b border-white/10 bg-dark/90 px-4 py-3 text-white backdrop-blur md:px-8">
         <div className="mx-auto flex max-w-7xl items-center justify-between">
-          <a href="/" className="text-lg font-semibold tracking-tight">AthletiGolf</a>
+          <a href="/" className="inline-flex items-center gap-2 text-lg font-semibold tracking-tight">
+            <img src={athletiGolfLogo} alt="" className="h-8 w-8 object-contain" aria-hidden="true" />
+            AthletiGolf
+          </a>
           <div className="hidden items-center gap-7 text-sm text-white/65 md:flex">
             <a href="#system" className="transition hover:text-white">Platform</a>
             <a href="#modules" className="transition hover:text-white">Modules</a>
@@ -42,7 +46,10 @@ export default function Landing() {
         <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-dark/60 to-transparent" />
         <div className="relative mx-auto flex min-h-[calc(92vh-4rem)] max-w-7xl flex-col items-start justify-center px-4 py-20 md:items-end md:px-8">
           <div className="max-w-2xl rounded-xl border border-white/10 bg-dark/32 p-5 backdrop-blur-[2px] md:bg-transparent md:p-0 md:text-right md:backdrop-blur-0">
-          <p className="mb-5 text-xs font-bold uppercase tracking-[0.22em] text-pulse">Golf x athletic performance</p>
+          <div className="mb-5 inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.22em] text-pulse md:justify-end">
+            <img src={athletiGolfLogo} alt="" className="h-9 w-9 object-contain" aria-hidden="true" />
+            Golf x athletic performance
+          </div>
           <h1 className="text-5xl font-semibold leading-[0.98] md:text-7xl">
             AthletiGolf Performance Platform
           </h1>

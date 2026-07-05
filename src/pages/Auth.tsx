@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { ArrowRight, ShieldCheck } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { Button, FieldLabel, TextInput } from "@/components/ui";
 import { isValidUsername, normalizeUsername, usernameRules } from "@/lib/usernames";
+import athletiGolfLogo from "@/assets/athletigolf-logo-transparent.png";
 
 export default function AuthPage() {
   const { signUp, signIn } = useAuth();
@@ -45,7 +46,12 @@ export default function AuthPage() {
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_15%,rgba(0,166,200,0.28),transparent_34%),radial-gradient(circle_at_80%_80%,rgba(65,87,216,0.24),transparent_38%)]" />
           <div className="relative">
             <div className="mb-8 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/8 px-4 py-2 text-xs font-bold uppercase tracking-[0.16em] text-pulse">
-              <ShieldCheck className="h-4 w-4" />
+              <img
+                src={athletiGolfLogo}
+                alt=""
+                className="h-7 w-7 object-contain"
+                aria-hidden="true"
+              />
               AthletiGolf
             </div>
             <h1 className="max-w-xl text-5xl font-semibold leading-tight">
