@@ -4,7 +4,7 @@ import { Button, FieldLabel, SelectInput, TextArea, TextInput } from "@/componen
 import { supabase } from "@/lib/supabase";
 import type { PracticeDrill } from "@/lib/types";
 
-type PracticeType = "Driving Range" | "Putting" | "Chipping" | "Short Game" | "On Course";
+type PracticeType = "Driving Range" | "Putting" | "Chipping" | "Short Game" | "On Course" | "Sim Work";
 type PracticeDrillForm = {
   name: string;
   distance: string;
@@ -18,6 +18,7 @@ const focusOptionsMap: Record<PracticeType, string[]> = {
   "Chipping": ["Bump and Run", "Standard Chip", "Flop Shot", "Contact", "Landing Spot"],
   "Short Game": ["Pitching", "Bunker Play", "Wedge Distance", "Up and Downs"],
   "On Course": ["Course Strategy", "Pre-shot Routine", "Scoring", "Shot Selection"],
+  "Sim Work": ["Game", "On Course", "Driver", "Woods", "Long Irons", "Mid Irons", "Wedges", "Shot Shapes", "Gapping"],
 };
 
 const drillOptionsMap: Record<PracticeType, string[]> = {
@@ -26,9 +27,10 @@ const drillOptionsMap: Record<PracticeType, string[]> = {
   "Chipping": ["Up-and-Down Ladder", "Landing Spot", "One-Putt Conversion", "Contact Control"],
   "Short Game": ["Bunker Saves", "Wedge Ladder", "Pitch Proximity", "Random Lies"],
   "On Course": ["Penalty-Free Holes", "Conservative Targets", "Par Saves", "Routine Reps"],
+  "Sim Work": ["Virtual 18", "Fairway Finder", "Gapping Ladder", "Shot Shape Ladder", "Approach Windows"],
 };
 
-const practiceTypes: PracticeType[] = ["Driving Range", "Putting", "Chipping", "Short Game", "On Course"];
+const practiceTypes: PracticeType[] = ["Driving Range", "Putting", "Chipping", "Short Game", "On Course", "Sim Work"];
 const blankPracticePlan = {
   practiceType: "Driving Range" as PracticeType,
   focusArea: "",
@@ -170,7 +172,7 @@ export default function PracticeSession() {
           </Link>
           <p className="mb-3 text-xs font-bold uppercase tracking-[0.2em] text-golf">Golf Practice</p>
           <h1 className="mb-3 text-4xl font-semibold tracking-tight text-dark">Log Practice</h1>
-          <p className="text-muted">Track your range, putting, chipping and short game sessions.</p>
+          <p className="text-muted">Track your range, sim, putting, chipping and short game sessions.</p>
         </div>
 
         <form onSubmit={handleSubmit} className="rounded-xl border border-line bg-panel p-6 shadow-sm">
@@ -196,11 +198,9 @@ export default function PracticeSession() {
                   setDrills([]);
                 }}
               >
-                <option>Driving Range</option>
-                <option>Putting</option>
-                <option>Chipping</option>
-                <option>Short Game</option>
-                <option>On Course</option>
+                {practiceTypes.map((type) => (
+                  <option key={type}>{type}</option>
+                ))}
               </SelectInput>
             </div>
 

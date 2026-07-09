@@ -6,7 +6,7 @@ import { Button, ConfirmDialog, EmptyState, FieldLabel, PageHeader, StatCard, Su
 import { supabase } from "@/lib/supabase";
 import type { PracticeDrill, PracticeSession } from "@/lib/types";
 
-type PracticeType = "Driving Range" | "Putting" | "Chipping" | "Short Game" | "On Course";
+type PracticeType = "Driving Range" | "Putting" | "Chipping" | "Short Game" | "On Course" | "Sim Work";
 type PracticeDrillForm = {
   name: string;
   distance: string;
@@ -14,7 +14,7 @@ type PracticeDrillForm = {
   successes: string;
 };
 
-const practiceTypes: PracticeType[] = ["Driving Range", "Putting", "Chipping", "Short Game", "On Course"];
+const practiceTypes: PracticeType[] = ["Driving Range", "Putting", "Chipping", "Short Game", "On Course", "Sim Work"];
 
 const blankDrill = (): PracticeDrillForm => ({
   name: "",
@@ -123,6 +123,7 @@ export default function PracticeHistory() {
   const drillCount = sessions.reduce((sum, session) => sum + normalisePracticeDrills(session).length, 0);
   const avgRating = average(sessions.map((session) => session.rating).filter(isNumber));
   const shortGameSessions = sessions.filter((s) => s.practice_type === "Chipping" || s.practice_type === "Short Game").length;
+  const simSessions = sessions.filter((s) => s.practice_type === "Sim Work").length;
 
   if (loading) {
     return (
@@ -224,6 +225,7 @@ export default function PracticeHistory() {
               <div className="mt-5 space-y-4">
                 <PracticeMix label="Short game" value={shortGameSessions} total={sessions.length} />
                 <PracticeMix label="Range" value={sessions.filter((s) => s.practice_type === "Driving Range").length} total={sessions.length} />
+                <PracticeMix label="Sim work" value={simSessions} total={sessions.length} />
                 <PracticeMix label="Putting" value={sessions.filter((s) => s.practice_type === "Putting").length} total={sessions.length} />
               </div>
             </Surface>
