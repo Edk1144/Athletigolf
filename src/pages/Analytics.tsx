@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { ArrowUpRight, BarChart3, Brain, Dumbbell, Flag, Target } from "lucide-react";
 import { Button, EmptyState, SectionTitle, Surface } from "@/components/ui";

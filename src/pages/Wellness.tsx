@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Activity, CalendarDays, ChevronLeft, ChevronRight, Copy, Database, Flame, Moon, Pencil, Plus, Scale, Search, Trash2, Utensils, Zap } from "lucide-react";
 import { Button, EmptyState, FieldLabel, PageHeader, SelectInput, Surface, TextArea, TextInput } from "@/components/ui";
 import { supabase } from "@/lib/supabase";
