@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Activity, ExternalLink, Footprints, Link2, Route, ShieldCheck, Timer, Trash2, Watch } from "lucide-react";
 import { Button, EmptyState, FieldLabel, PageHeader, SelectInput, StatCard, Surface, TextArea, TextInput } from "@/components/ui";
+import { todayIso } from "@/lib/dates";
 import { supabase } from "@/lib/supabase";
 import type { CardioSession, StravaConnection } from "@/lib/types";
 
@@ -18,7 +19,7 @@ type CardioForm = {
 
 const emptyForm: CardioForm = {
   activity_type: "run",
-  session_date: new Date().toISOString().slice(0, 10),
+  session_date: todayIso(),
   distance_km: "",
   duration_minutes: "",
   avg_heart_rate: "",
@@ -230,9 +231,9 @@ export default function Cardio() {
       />
 
       <section className="mb-5 grid gap-4 md:grid-cols-4">
-        <StatCard label="App 7-day distance" value={`${formatNumber(stats.weekDistance)} km`} tone="bg-white" sub="manual entries only" />
-        <StatCard label="App 7-day time" value={`${stats.weekMinutes} min`} tone="bg-white" sub="manual entries only" />
-        <StatCard label="App avg pace" value={stats.averagePace || "-"} tone="bg-white" sub="manual entries only" />
+        <StatCard label="Private 7-day distance" value={`${formatNumber(stats.weekDistance)} km`} tone="bg-white" sub="manual + Strava" />
+        <StatCard label="Private 7-day time" value={`${stats.weekMinutes} min`} tone="bg-white" sub="manual + Strava" />
+        <StatCard label="Private avg pace" value={stats.averagePace || "-"} tone="bg-white" sub="manual + Strava" />
         <StatCard label="Private sessions" value={sessions.length} tone="bg-white" />
       </section>
 
@@ -434,7 +435,7 @@ export default function Cardio() {
               <div className="flex items-start gap-3">
                 <ShieldCheck className="mt-0.5 h-5 w-5 text-pulse" />
                 <p className="text-sm leading-relaxed text-muted">
-                  These balance notes use AthletiGolf manual/app-entered cardio only. Strava-imported activities should remain a private connected-account log unless Strava approves broader analysis.
+                  These balance notes use your private cardio total, including Strava imports. Strava-derived activity data should still stay out of social sharing, AthletiAI and cross-user analytics.
                 </p>
               </div>
             </div>
@@ -494,12 +495,11 @@ function Advice({ title, detail }: { title: string; detail: string }) {
 }
 
 function getCardioStats(sessions: CardioSession[]) {
-  const appSessions = sessions.filter((session) => session.source !== "strava");
   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-  const weekSessions = appSessions.filter((session) => new Date(session.session_date) >= weekAgo);
+  const weekSessions = sessions.filter((session) => new Date(session.session_date) >= weekAgo);
   const weekDistance = weekSessions.reduce((sum, session) => sum + (session.distance_km || 0), 0);
   const weekMinutes = weekSessions.reduce((sum, session) => sum + (session.duration_minutes || 0), 0);
-  const totalDistance = appSessions.reduce((sum, session) => sum + (session.distance_km || 0), 0);
+  const totalDistance = sessions.reduce((sum, session) => sum + (session.distance_km || 0), 0);
 
   return {
     weekDistance,

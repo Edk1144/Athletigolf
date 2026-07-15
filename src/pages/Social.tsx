@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "wouter";
 import { Activity, Check, Copy, Dumbbell, Flag, MapPin, Pencil, ShieldCheck, UserPlus, Users, X } from "lucide-react";
 import { Button, EmptyState, FieldLabel, PageHeader, SelectInput, Surface, TextArea, TextInput } from "@/components/ui";
 import { supabase } from "@/lib/supabase";
@@ -45,6 +46,7 @@ export default function Social() {
         .from("live_activities")
         .select("*")
         .is("ended_at", null)
+        .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
         .order("started_at", { ascending: false }),
       supabase.rpc("get_friend_connections_with_profiles"),
       supabase.from("profiles").select("onboarding_data, username").maybeSingle(),
@@ -620,7 +622,10 @@ function ActivityRow({ activity, name }: { activity: LiveActivity; name?: string
             {activity.location_name || "No location"} {activity.detail ? `- ${activity.detail}` : ""}
           </p>
           <p className="mt-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted">
-            {name || `Friend ${activity.user_id.slice(0, 8)}`} - {formatRelativeTime(activity.started_at)}
+            <Link href={`/social/friends/${activity.user_id}`} className="text-dark transition hover:text-pulse">
+              {name || `Friend ${activity.user_id.slice(0, 8)}`}
+            </Link>{" "}
+            - {formatRelativeTime(activity.started_at)}
           </p>
         </div>
         <span className="w-fit rounded-full bg-pulse/10 px-3 py-1 text-xs font-bold text-pulse">Live</span>
@@ -677,7 +682,13 @@ function ConnectionSection({
                     </div>
                   ) : (
                     <div className="flex flex-wrap items-center gap-2">
-                      <h4 className="font-semibold text-dark">{label}</h4>
+                      {connection.status === "accepted" ? (
+                        <Link href={`/social/friends/${otherId}`} className="font-semibold text-dark transition hover:text-pulse">
+                          {label}
+                        </Link>
+                      ) : (
+                        <h4 className="font-semibold text-dark">{label}</h4>
+                      )}
                       <button
                         type="button"
                         onClick={() => onRename(connection)}

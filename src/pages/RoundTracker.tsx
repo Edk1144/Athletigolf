@@ -1,10 +1,11 @@
-import { useMemo, useState } from "react";
-import { Link } from "wouter";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useLocation } from "wouter";
 import { ArrowLeft, CheckCircle2, Flag, Save } from "lucide-react";
 import { Button, Card, PageHeader, StatCard } from "@/components/ui";
 import { useAuth } from "@/hooks/useAuth";
+import { todayIso } from "@/lib/dates";
 import { supabase } from "@/lib/supabase";
-import type { FairwayResult, TeeShotLocation } from "@/lib/types";
+import type { FairwayResult, Round, RoundHole, TeeShotLocation } from "@/lib/types";
 
 type Step = "setup" | "holes" | "review" | "saved";
 
@@ -48,7 +49,10 @@ const needsRecoveryChoice = (hole: Hole) =>
 
 export default function RoundTracker() {
   const { user } = useAuth();
+  const [, navigate] = useLocation();
   const [step, setStep] = useState<Step>("setup");
+  const [existingRoundId, setExistingRoundId] = useState<string | null>(null);
+  const [savedStatus, setSavedStatus] = useState<"completed" | "unfinished">("completed");
   const [holesPlayed, setHolesPlayed] = useState<9 | 18>(18);
   const [roundName, setRoundName] = useState("");
   const [course, setCourse] = useState("");
@@ -58,13 +62,54 @@ export default function RoundTracker() {
   const [averageDrivingDistance, setAverageDrivingDistance] = useState("");
   const [longestDrive, setLongestDrive] = useState("");
   const [teeShotQuality, setTeeShotQuality] = useState("");
-  const [date, setDate] = useState("");
+  const [date, setDate] = useState(todayIso());
   const [notes, setNotes] = useState("");
   const [holes, setHoles] = useState<Hole[]>(createHoles(18));
   const [currentHoleIndex, setCurrentHoleIndex] = useState(0);
   const [recoveryPromptIndex, setRecoveryPromptIndex] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
+
+  useEffect(() => {
+    if (!user || typeof window === "undefined") return;
+    const resumeId = new URLSearchParams(window.location.search).get("resume");
+    if (!resumeId) return;
+
+    let cancelled = false;
+    async function loadDraft() {
+      setSaveError("");
+      const [{ data: round }, { data: holeRows }] = await Promise.all([
+        supabase.from("rounds").select("*").eq("id", resumeId).maybeSingle(),
+        supabase.from("round_holes").select("*").eq("round_id", resumeId).order("hole_number", { ascending: true }),
+      ]);
+
+      if (cancelled || !round) return;
+
+      const loadedRound = round as Round;
+      const targetHoles = loadedRound.target_holes === 9 ? 9 : 18;
+      setExistingRoundId(loadedRound.id);
+      setSavedStatus(loadedRound.status === "completed" ? "completed" : "unfinished");
+      setHolesPlayed(targetHoles);
+      setRoundName(loadedRound.round_name || "");
+      setCourse(loadedRound.course || "");
+      setCompetition(loadedRound.is_competition);
+      setTeeColour(loadedRound.tee_colour || "");
+      setPlayingPartners(loadedRound.playing_partners || "");
+      setAverageDrivingDistance(loadedRound.average_driving_distance?.toString() || "");
+      setLongestDrive(loadedRound.longest_drive?.toString() || "");
+      setTeeShotQuality(loadedRound.tee_shot_quality || "");
+      setDate(loadedRound.date || todayIso());
+      setNotes(loadedRound.notes || "");
+      setHoles(toDraftHoles(targetHoles, (holeRows as RoundHole[]) || []));
+      setCurrentHoleIndex(0);
+      setStep("holes");
+    }
+
+    loadDraft();
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
 
   const updateHole = <K extends keyof Hole>(index: number, field: K, value: Hole[K]) => {
     const updatedHole = { ...holes[index], [field]: value };
@@ -174,10 +219,14 @@ export default function RoundTracker() {
     setStep("review");
   };
 
-  const finishRound = async () => {
+  const finishRound = async (status: "completed" | "unfinished" = "completed") => {
     if (!user) return;
     if (!stats.holesCompleted) {
       setSaveError("Enter at least one hole before saving the round.");
+      return;
+    }
+    if (status === "completed" && stats.holesCompleted !== holesPlayed) {
+      setSaveError("Complete every hole before saving as a finished round, or save it as unfinished.");
       return;
     }
     const unresolvedRecoveryIndex = holes.findIndex(needsRecoveryChoice);
@@ -190,13 +239,14 @@ export default function RoundTracker() {
     setSaving(true);
     setSaveError("");
 
-    const { data: round, error: roundError } = await supabase
-      .from("rounds")
-      .insert({
+    const roundPayload = {
         user_id: user.id,
+        status,
+        target_holes: holesPlayed,
+        completed_at: status === "completed" ? new Date().toISOString() : null,
         round_name: roundName || null,
         course: course || null,
-        date: date || null,
+        date: date || todayIso(),
         score: stats.totalScore || null,
         fairways_hit: stats.fairwaysHit,
         fairways_possible: stats.fairwaysPossible,
@@ -214,9 +264,12 @@ export default function RoundTracker() {
         scramble_percentage: stats.scramblePercent,
         is_competition: competition,
         notes: notes || null,
-      })
-      .select("id")
-      .single();
+    };
+
+    const roundResult = existingRoundId
+      ? await supabase.from("rounds").update(roundPayload).eq("id", existingRoundId).select("id").single()
+      : await supabase.from("rounds").insert(roundPayload).select("id").single();
+    const { data: round, error: roundError } = roundResult;
 
     if (roundError || !round) {
       setSaving(false);
@@ -242,6 +295,15 @@ export default function RoundTracker() {
       }))
       .filter((hole) => hole.score !== null);
 
+    if (existingRoundId) {
+      const { error: deleteError } = await supabase.from("round_holes").delete().eq("round_id", existingRoundId);
+      if (deleteError) {
+        setSaving(false);
+        setSaveError(deleteError.message);
+        return;
+      }
+    }
+
     const { error: holesError } = await supabase.from("round_holes").insert(holeRows);
     setSaving(false);
 
@@ -250,6 +312,7 @@ export default function RoundTracker() {
       return;
     }
 
+    setSavedStatus(status);
     setStep("saved");
   };
 
@@ -262,13 +325,16 @@ export default function RoundTracker() {
     setAverageDrivingDistance("");
     setLongestDrive("");
     setTeeShotQuality("");
-    setDate("");
+    setExistingRoundId(null);
+    setSavedStatus("completed");
+    setDate(todayIso());
     setNotes("");
     setHolesPlayed(18);
     setHoles(createHoles(18));
     setCurrentHoleIndex(0);
     setSaveError("");
     setStep("setup");
+    navigate("/golf/submit");
   };
 
   if (step === "saved") {
@@ -276,9 +342,13 @@ export default function RoundTracker() {
       <div className="min-h-screen bg-cream p-6 text-dark">
         <Card className="mx-auto max-w-4xl p-8 text-center">
           <CheckCircle2 className="mx-auto mb-5 h-12 w-12 text-golf" />
-          <h1 className="mb-3 text-4xl font-semibold">Round Saved</h1>
+          <h1 className="mb-3 text-4xl font-semibold">
+            {savedStatus === "unfinished" ? "Round Saved As Unfinished" : "Round Saved"}
+          </h1>
           <p className="mx-auto mb-8 max-w-xl text-black/60">
-            Your round and hole-by-hole stats have been logged.
+            {savedStatus === "unfinished"
+              ? "It is in Round History and will stay out of scoring averages until you complete it."
+              : "Your round and hole-by-hole stats have been logged."}
           </p>
           <div className="flex flex-col justify-center gap-3 sm:flex-row">
             <Button onClick={resetRound} variant="golf">
@@ -700,12 +770,20 @@ export default function RoundTracker() {
                     Back To Hole Entry
                   </Button>
                   <Button
-                    onClick={finishRound}
+                    onClick={() => finishRound("unfinished")}
+                    disabled={saving}
+                    variant="secondary"
+                  >
+                    <Save className="h-4 w-4" />
+                    {saving ? "Saving..." : "Save Unfinished"}
+                  </Button>
+                  <Button
+                    onClick={() => finishRound("completed")}
                     disabled={saving}
                     variant="golf"
                   >
                     <Save className="h-4 w-4" />
-                    {saving ? "Saving..." : "Save Round"}
+                    {saving ? "Saving..." : "Save Finished Round"}
                   </Button>
                 </div>
               )}
@@ -775,6 +853,30 @@ function SelectField({
       </select>
     </div>
   );
+}
+
+function toDraftHoles(count: 9 | 18, rows: RoundHole[]): Hole[] {
+  const holes = createHoles(count);
+  rows.forEach((row) => {
+    const index = row.hole_number - 1;
+    if (index < 0 || index >= holes.length) return;
+    holes[index] = {
+      par: row.par || 4,
+      score: row.score === null || row.score === undefined ? "" : row.score.toString(),
+      fairway: row.fairway_result || "na",
+      teeShotLocation: row.tee_shot_location || "",
+      gir: row.gir,
+      putts: row.putts === null || row.putts === undefined ? "" : row.putts.toString(),
+      penaltyShots: row.penalty_shots === null || row.penalty_shots === undefined ? "" : row.penalty_shots.toString(),
+      chipShots: row.chip_shots === null || row.chip_shots === undefined ? "" : row.chip_shots.toString(),
+      greensideBunkerShots:
+        row.greenside_bunker_shots === null || row.greenside_bunker_shots === undefined
+          ? ""
+          : row.greenside_bunker_shots.toString(),
+      recoveryShotType: row.recovery_shot_type || "",
+    };
+  });
+  return holes;
 }
 
 function formatOption(option: string) {

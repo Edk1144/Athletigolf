@@ -64,6 +64,8 @@ export type OnboardingData = {
 export type Round = {
   id: string;
   user_id: string;
+  status?: "draft" | "unfinished" | "completed";
+  target_holes?: number | null;
   round_name?: string | null;
   course: string | null;
   date: string | null;
@@ -84,6 +86,7 @@ export type Round = {
   scramble_percentage: number | null;
   is_competition: boolean;
   notes: string | null;
+  completed_at?: string | null;
   created_at: string;
 };
 
@@ -337,6 +340,16 @@ export type FriendConnectionProfile = FriendConnection & {
   other_user_id: string;
   other_username: string | null;
   other_display_name: string | null;
+};
+
+export type FriendProfileSummary = {
+  user_id: string;
+  username: string | null;
+  display_name: string | null;
+  main_sport: string | null;
+  main_goal: string | null;
+  created_at: string;
+  relationship_label: string | null;
 };
 
 export type LiveActivity = {

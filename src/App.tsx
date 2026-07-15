@@ -14,6 +14,7 @@ import Analytics from "@/pages/Analytics";
 import AthletiAI from "@/pages/AthletiAI";
 import Wellness from "@/pages/Wellness";
 import Social from "@/pages/Social";
+import FriendProfile from "@/pages/FriendProfile";
 import RoundHistory from "@/pages/RoundHistory";
 import Competitions from "@/pages/Competitions";
 import ArchivedSplits from "@/pages/ArchivedSplits";
@@ -156,6 +157,12 @@ function AppShell() {
         <Route path="/social">
           <ProtectedRoute>
             <Social />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/social/friends/:friendId">
+          <ProtectedRoute>
+            <FriendProfile />
           </ProtectedRoute>
         </Route>
 

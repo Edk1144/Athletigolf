@@ -11,15 +11,16 @@ const average = (values: number[]) =>
     : null;
 
 export function getGolfStats(rounds: Round[]) {
-  const scoredRoundValues = rounds
+  const completeRounds = rounds.filter(isCompleteScoringRound);
+  const scoredRoundValues = completeRounds
     .map(getComparableRoundScore)
     .filter(hasValue);
-  const fairwayRounds = rounds.filter((round) => hasValue(round.fairways_hit));
-  const girRounds = rounds.filter((round) => hasValue(round.greens_in_regulation));
-  const puttingRounds = rounds.filter((round) => hasValue(round.putts));
-  const scrambleRounds = rounds.filter((round) => hasValue(round.scramble_percentage));
-  const distanceRounds = rounds.filter((round) => hasValue(round.average_driving_distance));
-  const longestDriveRounds = rounds.filter((round) => hasValue(round.longest_drive));
+  const fairwayRounds = completeRounds.filter((round) => hasValue(round.fairways_hit));
+  const girRounds = completeRounds.filter((round) => hasValue(round.greens_in_regulation));
+  const puttingRounds = completeRounds.filter((round) => hasValue(round.putts));
+  const scrambleRounds = completeRounds.filter((round) => hasValue(round.scramble_percentage));
+  const distanceRounds = completeRounds.filter((round) => hasValue(round.average_driving_distance));
+  const longestDriveRounds = completeRounds.filter((round) => hasValue(round.longest_drive));
 
   const fairwaysHit = fairwayRounds.reduce(
     (sum, round) => sum + (round.fairways_hit ?? 0),
@@ -53,12 +54,12 @@ export function getGolfStats(rounds: Round[]) {
     avgGirPercent:
       greensPossible > 0 ? Math.round((greensHit / greensPossible) * 100) : null,
     avgPutts: average(puttingRounds.map((round) => round.putts as number)),
-    avgPenaltyShots: average(rounds.map((round) => round.penalty_shots ?? 0)),
-    avgChipShots: average(rounds.map((round) => round.chip_shots ?? 0)),
+    avgPenaltyShots: average(completeRounds.map((round) => round.penalty_shots ?? 0)),
+    avgChipShots: average(completeRounds.map((round) => round.chip_shots ?? 0)),
     avgGreensideBunkerShots: average(
-      rounds.map((round) => round.greenside_bunker_shots ?? 0)
+      completeRounds.map((round) => round.greenside_bunker_shots ?? 0)
     ),
-    totalPenaltyShots: rounds.reduce(
+    totalPenaltyShots: completeRounds.reduce(
       (sum, round) => sum + (round.penalty_shots ?? 0),
       0
     ),
@@ -76,11 +77,18 @@ export function getGolfStats(rounds: Round[]) {
 }
 
 export function getComparableRoundScore(round: Round) {
+  if (!isCompleteScoringRound(round)) return null;
   if (!hasValue(round.score)) return null;
   const holesPlayed = round.holes_played ?? 18;
   if (holesPlayed === 18) return round.score;
   if (holesPlayed === 9) return round.score * 2;
   return null;
+}
+
+export function isCompleteScoringRound(round: Round) {
+  if (round.status && round.status !== "completed") return false;
+  const holesPlayed = round.holes_played ?? 18;
+  return holesPlayed === 9 || holesPlayed === 18;
 }
 
 export function getShortGameStats(holes: RoundHole[]) {

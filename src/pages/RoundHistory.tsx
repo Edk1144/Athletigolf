@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
-import { Edit3, Eye, Flag, Trash2, X } from "lucide-react";
+import { Edit3, Eye, Flag, Play, Trash2, X } from "lucide-react";
 import { Button, ConfirmDialog, EmptyState, FieldLabel, PageHeader, StatCard, Surface, TextArea, TextInput } from "@/components/ui";
-import { formatAverage, getGolfStats } from "@/lib/golfStats";
+import { formatAverage, getGolfStats, isCompleteScoringRound } from "@/lib/golfStats";
 import { supabase } from "@/lib/supabase";
 import type { FairwayResult, Round, RoundHole, TeeShotLocation } from "@/lib/types";
 
@@ -146,10 +146,15 @@ export default function RoundHistory() {
 
     const holeStats = calculateHoleStats(editHoles);
     const hasHoleScores = holeStats.holesCompleted > 0;
+    const targetHoles = editingRound.target_holes || editHoles.length || Number(editForm.holes_played || 18);
+    const nextStatus = hasHoleScores && holeStats.holesCompleted === targetHoles ? "completed" : "unfinished";
 
     const { error } = await supabase
       .from("rounds")
       .update({
+        status: nextStatus,
+        target_holes: targetHoles,
+        completed_at: nextStatus === "completed" ? editingRound.completed_at || new Date().toISOString() : null,
         round_name: editForm.round_name || null,
         course: editForm.course || null,
         date: editForm.date || null,
@@ -232,6 +237,8 @@ export default function RoundHistory() {
   };
 
   const golfStats = getGolfStats(rounds);
+  const completedRounds = rounds.filter(isCompleteScoringRound);
+  const unfinishedRounds = rounds.filter((round) => !isCompleteScoringRound(round));
 
   if (loading) {
     return (
@@ -253,7 +260,7 @@ export default function RoundHistory() {
         />
 
         <section className="mb-5 grid gap-4 md:grid-cols-4">
-          <StatCard label="Rounds Logged" value={rounds.length} />
+          <StatCard label="Completed Rounds" value={completedRounds.length} sub={unfinishedRounds.length ? `${unfinishedRounds.length} unfinished` : "all scoring rounds"} />
           <StatCard label="Average Score" value={formatAverage(golfStats.avgScore)} sub="18-hole equivalent" />
           <StatCard label="Best Round" value={golfStats.bestScore === null ? "-" : golfStats.bestScore} sub="9s doubled, partials ignored" />
           <StatCard label="Avg Drive" value={golfStats.avgDrivingDistance === null ? "-" : `${Math.round(golfStats.avgDrivingDistance)} yd`} />
@@ -292,6 +299,11 @@ export default function RoundHistory() {
                       <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${round.is_competition ? "bg-gold/15 text-gold" : "bg-golf/10 text-golf"}`}>
                         {round.is_competition ? "Competition" : "General"}
                       </span>
+                      {!isCompleteScoringRound(round) && (
+                        <span className="rounded-full bg-pulse/12 px-2.5 py-1 text-xs font-bold text-pulse">
+                          Unfinished
+                        </span>
+                      )}
                     </div>
                     <p className="text-sm text-muted">
                       {round.course && round.round_name ? `${round.course} / ` : ""}
@@ -309,6 +321,9 @@ export default function RoundHistory() {
 
                   <div className="flex gap-2 lg:justify-end">
                     <Button variant="secondary" onClick={() => setSelectedRound(round)}><Eye className="h-4 w-4" />Details</Button>
+                    {!isCompleteScoringRound(round) && (
+                      <Button variant="golf" onClick={() => navigate(`/golf/submit?resume=${round.id}`)}><Play className="h-4 w-4" />Resume</Button>
+                    )}
                     <Button variant="ghost" onClick={() => openEdit(round)} aria-label="Edit round"><Edit3 className="h-4 w-4" /></Button>
                   </div>
                 </div>

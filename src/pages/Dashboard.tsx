@@ -28,6 +28,7 @@ import {
   lowerIsBetterControl,
 } from "@/lib/golfStats";
 import { getTrainingIntelligence } from "@/lib/insights";
+import { todayIso as getTodayIso, isSameLocalIsoDate } from "@/lib/dates";
 import type { CardioSession, Competition, ExerciseLog, OnboardingData, Round, RoundHole, Workout } from "@/lib/types";
 import type { WellnessLog } from "@/lib/types";
 import type { LiveActivity } from "@/lib/types";
@@ -61,7 +62,13 @@ export default function Dashboard() {
         supabase.from("cardio_sessions").select("*").order("session_date", { ascending: false }).limit(30),
         supabase.from("competitions").select("*").eq("status", "upcoming").order("competition_date", { ascending: true }),
         supabase.from("daily_wellness_logs").select("*").order("log_date", { ascending: false }).limit(7),
-        supabase.from("live_activities").select("*").is("ended_at", null).order("started_at", { ascending: false }).limit(1),
+        supabase
+          .from("live_activities")
+          .select("*")
+          .is("ended_at", null)
+          .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
+          .order("started_at", { ascending: false })
+          .limit(1),
         supabase.from("profiles").select("onboarding_data").maybeSingle(),
       ]);
       setRounds((r as Round[]) || []);
@@ -84,17 +91,17 @@ export default function Dashboard() {
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const workoutsThisWeek = workouts.filter((w) => new Date(w.created_at) >= weekAgo).length;
   const roundsThisMonth = rounds.filter((r) => new Date(r.created_at) >= monthStart).length;
-  const manualCardioSessions = cardioSessions.filter((session) => session.source !== "strava");
-  const cardioThisWeek = manualCardioSessions.filter((session) => new Date(session.session_date) >= weekAgo).length;
-  const cardioDistanceThisWeek = manualCardioSessions
+  const personalCardioSessions = cardioSessions;
+  const cardioThisWeek = personalCardioSessions.filter((session) => new Date(session.session_date) >= weekAgo).length;
+  const cardioDistanceThisWeek = personalCardioSessions
     .filter((session) => new Date(session.session_date) >= weekAgo)
     .reduce((sum, session) => sum + (session.distance_km || 0), 0);
   const latestWorkout = workouts[0] ?? null;
-  const latestCardio = manualCardioSessions[0] ?? null;
+  const latestCardio = personalCardioSessions[0] ?? null;
   const lastRound = rounds[0] ?? null;
   const nextCompetition = competitions[0] ?? null;
   const competitionToday = nextCompetition ? isToday(nextCompetition.competition_date) : false;
-  const todayIso = new Date().toISOString().slice(0, 10);
+  const todayIso = getTodayIso();
   const todayWellness = wellnessLogs.find((log) => log.log_date === todayIso) || wellnessLogs[0] || null;
   const hydrationProgress = todayWellness?.water_litres ? Math.min((todayWellness.water_litres / wellnessTargets.waterLitres) * 100, 100) : 0;
   const liveActivity = liveActivities[0] || null;
@@ -114,8 +121,8 @@ export default function Dashboard() {
   const checklist = buildDailyChecklist({
     golfEnabled,
     hasWellnessToday: todayWellness?.log_date === todayIso,
-    hasTrainingToday: workouts.some((workout) => isSameIsoDate(workout.date || workout.created_at, todayIso)),
-    hasCardioToday: manualCardioSessions.some((session) => session.session_date === todayIso),
+    hasTrainingToday: workouts.some((workout) => isSameLocalIsoDate(workout.date || workout.created_at, todayIso)),
+    hasCardioToday: personalCardioSessions.some((session) => isSameLocalIsoDate(session.session_date, todayIso)),
     hasRoundThisMonth: roundsThisMonth > 0,
   });
   const nextAction = checklist.find((item) => !item.done) || checklist[0];
@@ -135,7 +142,7 @@ export default function Dashboard() {
       meta: workout.date || new Date(workout.created_at).toLocaleDateString("en-GB"),
       tone: "gym" as const,
     })),
-    ...manualCardioSessions.slice(0, 2).map((session) => ({
+    ...personalCardioSessions.slice(0, 2).map((session) => ({
       id: `cardio-${session.id}`,
       type: "Cardio",
       title: `${getCardioActivityLabel(session.activity_type)}${session.distance_km ? ` / ${session.distance_km} km` : ""}`,
@@ -706,14 +713,6 @@ function buildDailyChecklist({
         ]
       : []),
   ];
-}
-
-function isSameIsoDate(value: string | null | undefined, targetIso: string) {
-  if (!value) return false;
-  if (value.slice(0, 10) === targetIso) return true;
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return false;
-  return parsed.toISOString().slice(0, 10) === targetIso;
 }
 
 function getCardioActivityLabel(activity: CardioSession["activity_type"]) {
