@@ -12,8 +12,13 @@ export type ExerciseLibraryItem = {
   safetyNotes?: string;
   golfRelevant?: boolean;
   golfCarryover: string;
+  movementPattern?: string;
+  splitTags?: string[];
+  equipmentOptions?: string[];
   videoSearch: string;
+  videoUrl?: string;
   formCues?: string[];
+  coachingCues?: string[];
   commonMistakes?: string[];
   alternatives: string[];
 };
@@ -36,6 +41,11 @@ export type ExerciseLibraryRow = {
   golf_benefit: string | null;
   alternatives: string[] | null;
   youtube_search: string | null;
+  movement_pattern?: string | null;
+  split_tags?: string[] | null;
+  equipment_options?: string[] | null;
+  coaching_cues?: string[] | null;
+  youtube_search_url?: string | null;
 };
 
 export const exerciseLibrary: ExerciseLibraryItem[] = [
@@ -172,8 +182,8 @@ export function getExerciseGuide(name: string) {
   if (libraryMatch) {
     return {
       ...libraryMatch,
-      videoUrl: `https://www.youtube.com/results?search_query=${encodeURIComponent(libraryMatch.videoSearch)}`,
-      formCues: libraryMatch.formCues || getFallbackCues(libraryMatch.movement),
+      videoUrl: libraryMatch.videoUrl || `https://www.youtube.com/results?search_query=${encodeURIComponent(libraryMatch.videoSearch)}`,
+      formCues: libraryMatch.coachingCues?.length ? libraryMatch.coachingCues : libraryMatch.formCues || getFallbackCues(libraryMatch.movement),
       commonMistakes: libraryMatch.commonMistakes || getFallbackMistakes(libraryMatch.movement),
       isLibraryMatch: true,
     };
@@ -225,8 +235,13 @@ export function toExerciseLibraryItem(row: ExerciseLibraryRow): ExerciseLibraryI
     safetyNotes: row.safety_notes || undefined,
     golfRelevant: row.golf_relevant,
     golfCarryover: row.golf_benefit || "Log this consistently so AthletiGolf can connect training with golf performance.",
+    movementPattern: row.movement_pattern || undefined,
+    splitTags: row.split_tags || [],
+    equipmentOptions: row.equipment_options || [],
     videoSearch: row.youtube_search || `${row.name} proper form`,
-    formCues: row.form_cues || undefined,
+    videoUrl: row.youtube_search_url || undefined,
+    formCues: row.coaching_cues?.length ? row.coaching_cues : row.form_cues || undefined,
+    coachingCues: row.coaching_cues || [],
     commonMistakes: row.common_mistakes || undefined,
     alternatives: row.alternatives || [],
   };
@@ -248,8 +263,8 @@ export function getExerciseGuideFromList(name: string, list: ExerciseLibraryItem
 
   return {
     ...libraryMatch,
-    videoUrl: `https://www.youtube.com/results?search_query=${encodeURIComponent(libraryMatch.videoSearch)}`,
-    formCues: libraryMatch.formCues || getFallbackCues(libraryMatch.movement),
+    videoUrl: libraryMatch.videoUrl || `https://www.youtube.com/results?search_query=${encodeURIComponent(libraryMatch.videoSearch)}`,
+    formCues: libraryMatch.coachingCues?.length ? libraryMatch.coachingCues : libraryMatch.formCues || getFallbackCues(libraryMatch.movement),
     commonMistakes: libraryMatch.commonMistakes || getFallbackMistakes(libraryMatch.movement),
     isLibraryMatch: true,
   };

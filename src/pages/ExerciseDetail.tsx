@@ -11,7 +11,7 @@ export default function ExerciseDetail() {
   const slug = params?.slug || "";
   const match = bySlug.get(slug);
   const guide = getExerciseGuideFromList(match?.name || exerciseNameFromSlug(slug), exercises);
-  const videoUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(guide.videoSearch)}`;
+  const videoUrl = guide.videoUrl || `https://www.youtube.com/results?search_query=${encodeURIComponent(guide.videoSearch)}`;
 
   return (
     <main className="min-h-screen bg-cream px-4 py-5 md:px-8 md:py-7">
