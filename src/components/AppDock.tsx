@@ -170,7 +170,7 @@ export default function AppDock() {
 
           <button type="button" aria-label="Close menu backdrop" className="absolute inset-0" onClick={closeMenu} />
 
-          <div className="pointer-events-none absolute inset-x-0 bottom-[calc(6.4rem+env(safe-area-inset-bottom))] mx-auto flex max-w-[420px] flex-col items-center px-5">
+          <div className="pointer-events-none absolute inset-x-0 bottom-[calc(6.9rem+env(safe-area-inset-bottom))] mx-auto flex max-w-[520px] flex-col items-center px-4">
             <p className="pointer-events-auto mb-4 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-xs font-bold uppercase tracking-[0.18em] text-white/72">
               {menu === "activity" ? "Activity" : menu === "create" ? "Quick Add" : "More"}
             </p>
@@ -191,13 +191,14 @@ export default function AppDock() {
               </div>
             )}
 
-            <div className="pointer-events-auto relative h-[15.5rem] w-full">
+            <div className="pointer-events-auto relative h-[17rem] w-full">
               {(menu === "activity" ? filteredActivityItems : menu === "create" ? filteredCreateItems : filteredMoreItems).map((item, index, items) => (
                 <ArcButton
                   key={item.label}
                   item={item}
                   index={index}
                   total={items.length}
+                  menu={menu}
                   active={activeGroup === item.group}
                   onClick={() => (menu === "activity" ? handleArcItem(item) : item.href && goTo(item.href))}
                 />
@@ -207,7 +208,7 @@ export default function AppDock() {
         </div>
       )}
 
-      <nav className="fixed inset-x-3 bottom-[calc(0.7rem+env(safe-area-inset-bottom))] z-50 mx-auto max-w-[430px] rounded-[2rem] border border-white/16 bg-[#07111f]/94 px-3 py-2 text-white shadow-[0_22px_70px_rgba(0,0,0,0.36)] backdrop-blur-xl">
+      <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-white/12 bg-[#07111f]/96 px-3 pb-[calc(0.6rem+env(safe-area-inset-bottom))] pt-2 text-white shadow-[0_-18px_60px_rgba(0,0,0,0.34)] backdrop-blur-xl">
         <div className="grid grid-cols-5 items-center gap-1">
           <DockButton label="Dashboard" icon={Home} active={location === "/dashboard"} onClick={() => goTo("/dashboard")} />
           <DockButton label="Activity" icon={Activity} active={menu === "activity"} onClick={() => openMenu("activity")} />
@@ -232,18 +233,22 @@ function ArcButton({
   item,
   index,
   total,
+  menu,
   active,
   onClick,
 }: {
   item: AppDockItem;
   index: number;
   total: number;
+  menu: DockMenu;
   active?: boolean;
   onClick: () => void;
 }) {
   const Icon = item.icon;
-  const angle = total === 1 ? 90 : 168 - (index * 156) / (total - 1);
-  const radius = total > 6 ? 116 : 104;
+  const spread = menu === "create" ? 180 : menu === "activity" ? 204 : 190;
+  const angle = total === 1 ? 90 : 90 + spread / 2 - (index * spread) / (total - 1);
+  const radius = menu === "create" ? 132 : total > 6 ? 148 : 136;
+  const top = menu === "create" ? "11.6rem" : "12.1rem";
   const x = Math.cos((angle * Math.PI) / 180) * radius;
   const y = -Math.sin((angle * Math.PI) / 180) * radius;
 
@@ -251,8 +256,8 @@ function ArcButton({
     <button
       type="button"
       onClick={onClick}
-      className="absolute left-1/2 top-[11.3rem] flex w-[5.3rem] -translate-x-1/2 flex-col items-center gap-2 text-center transition active:scale-95"
-      style={{ transform: `translate(calc(-50% + ${x}px), ${y}px)` }}
+      className="absolute left-1/2 flex w-[6rem] -translate-x-1/2 flex-col items-center gap-2 text-center transition active:scale-95"
+      style={{ top, transform: `translate(calc(-50% + ${x}px), ${y}px)` }}
     >
       <span className={`inline-flex h-14 w-14 items-center justify-center rounded-2xl border text-white shadow-xl ${toneClass(item.tone, active)}`}>
         <Icon className="h-6 w-6" />
