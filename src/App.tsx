@@ -28,6 +28,7 @@ import GolfQuiz from "@/pages/GolfQuiz";
 import RoundTracker from "@/pages/RoundTracker";
 import ComingSoon from "@/pages/ComingSoon";
 import AppIntro from "@/pages/AppIntro";
+import AppMore from "@/pages/AppMore";
 import { applyTextAutoFormatToField } from "@/lib/textFormatting";
 import { isNativeApp } from "@/lib/nativeApp";
 import { applyTheme, getStoredTheme } from "@/lib/theme";
@@ -275,6 +276,12 @@ function AppShell() {
 <Route path="/settings">
   <ProtectedRoute>
     <Settings />
+  </ProtectedRoute>
+</Route>
+
+<Route path="/more">
+  <ProtectedRoute>
+    <AppMore />
   </ProtectedRoute>
 </Route>
 

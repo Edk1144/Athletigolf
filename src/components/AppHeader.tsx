@@ -4,8 +4,6 @@ import { useLocation } from "wouter";
 import AppNotificationBell from "@/components/AppNotificationBell";
 
 const appRouteHistoryKey = "athletigolf-app-route-history";
-const appBackTargetKey = "athletigolf-app-back-target";
-const openMoreMenuEvent = "athletigolf-open-more-menu";
 const blockedBackRoutes = new Set(["/", "/auth", "/onboarding"]);
 
 const pageLabels: Array<{ match: RegExp; title: string; eyebrow: string }> = [
@@ -28,6 +26,7 @@ const pageLabels: Array<{ match: RegExp; title: string; eyebrow: string }> = [
   { match: /^\/exercises\//, title: "Exercise Guide", eyebrow: "Library" },
   { match: /^\/profile$/, title: "Profile", eyebrow: "Account" },
   { match: /^\/settings$/, title: "Settings", eyebrow: "Account" },
+  { match: /^\/more$/, title: "More", eyebrow: "Account" },
   { match: /^\/memberships$/, title: "Memberships", eyebrow: "Access" },
   { match: /^\/contact$/, title: "Contact", eyebrow: "Support" },
   { match: /^\/follow$/, title: "Follow", eyebrow: "Community" },
@@ -56,14 +55,6 @@ export default function AppHeader() {
 
   function handleBack() {
     if (typeof window !== "undefined") {
-      const backTarget = window.sessionStorage.getItem(appBackTargetKey);
-      if (backTarget === "more") {
-        window.sessionStorage.removeItem(appBackTargetKey);
-        window.dispatchEvent(new Event(openMoreMenuEvent));
-        navigate("/dashboard");
-        return;
-      }
-
       const storedHistory = readAppRouteHistory();
       const withoutCurrent = storedHistory.filter((route, index) => {
         const isLastCurrent = index === storedHistory.length - 1 && route === location;
