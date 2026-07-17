@@ -29,7 +29,7 @@ export function Button({
   return (
     <button
       className={cn(
-        "inline-flex min-h-10 items-center justify-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-semibold transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:translate-y-0 disabled:opacity-50",
+        "app-button inline-flex min-h-10 items-center justify-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-semibold transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:translate-y-0 disabled:opacity-50",
         variants[variant],
         className
       )}
@@ -41,7 +41,7 @@ export function Button({
 export function Card({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn("rounded-3xl border border-line bg-panel p-5 shadow-[0_20px_55px_rgba(11,17,23,0.07)]", className)}
+      className={cn("app-card rounded-3xl border border-line bg-panel p-5 shadow-[0_20px_55px_rgba(11,17,23,0.07)]", className)}
       {...props}
     />
   );
@@ -61,15 +61,15 @@ export function PageHeader({
   tone?: string;
 }) {
   return (
-    <div className="mb-7 flex flex-col gap-5 border-b border-line/80 pb-6 lg:flex-row lg:items-end lg:justify-between">
+    <div className="app-page-header mb-7 flex flex-col gap-5 border-b border-line/80 pb-6 lg:flex-row lg:items-end lg:justify-between">
       <div className="max-w-3xl">
-        <p className={cn("mb-3 text-xs font-bold uppercase tracking-[0.2em]", tone)}>
+        <p className={cn("app-page-eyebrow mb-3 text-xs font-bold uppercase tracking-[0.2em]", tone)}>
           {eyebrow}
         </p>
-        <h1 className="text-3xl font-semibold tracking-tight text-dark md:text-[2.65rem]">{title}</h1>
-        {description && <p className="mt-3 text-base leading-relaxed text-muted">{description}</p>}
+        <h1 className="app-page-title text-3xl font-semibold tracking-tight text-dark md:text-[2.65rem]">{title}</h1>
+        {description && <p className="app-page-description mt-3 text-base leading-relaxed text-muted">{description}</p>}
       </div>
-      {actions && <div className="flex flex-wrap gap-3">{actions}</div>}
+      {actions && <div className="app-page-actions flex flex-wrap gap-3">{actions}</div>}
     </div>
   );
 }
@@ -97,7 +97,7 @@ export function StatCard({
 export function Surface({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
     <section
-      className={cn("rounded-3xl border border-line bg-panel p-5 shadow-[0_20px_55px_rgba(11,17,23,0.07)]", className)}
+      className={cn("app-surface rounded-3xl border border-line bg-panel p-5 shadow-[0_20px_55px_rgba(11,17,23,0.07)]", className)}
       {...props}
     />
   );
@@ -133,7 +133,7 @@ export function EmptyState({
   action?: ReactNode;
 }) {
   return (
-    <div className="rounded-3xl border border-dashed border-line bg-white/65 p-8 text-center">
+    <div className="app-empty-state rounded-3xl border border-dashed border-line bg-white/65 p-8 text-center">
       <h3 className="text-lg font-semibold text-dark">{title}</h3>
       <p className="mx-auto mt-2 max-w-lg text-sm leading-relaxed text-muted">{description}</p>
       {action && <div className="mt-5 flex justify-center">{action}</div>}

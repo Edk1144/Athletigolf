@@ -5,14 +5,18 @@ import {
   BarChart3,
   Brain,
   CalendarDays,
+  ChevronRight,
   CreditCard,
   Droplets,
   Dumbbell,
+  ExternalLink,
   Flag,
   Footprints,
   HeartPulse,
   Home,
   Instagram,
+  KeyRound,
+  LogOut,
   Mail,
   MoreHorizontal,
   NotebookPen,
@@ -27,6 +31,7 @@ import {
 import { supabase } from "@/lib/supabase";
 import { isGolfEnabledMode } from "@/lib/sportMode";
 import type { OnboardingData } from "@/lib/types";
+import { useAuth } from "@/hooks/useAuth";
 
 type DockMenu = "activity" | "create" | "more" | null;
 type AppDockItem = {
@@ -68,19 +73,9 @@ const createItems: AppDockItem[] = [
   { label: "Cardio", href: "/fitness/cardio", icon: Footprints, tone: "gym" },
 ];
 
-const moreItems: AppDockItem[] = [
-  { label: "Profile", href: "/profile", icon: User, tone: "pulse" },
-  { label: "Settings", href: "/settings", icon: Settings, tone: "pulse" },
-  { label: "Memberships", href: "/memberships", icon: CreditCard, tone: "gold" },
-  { label: "Contact", href: "/contact", icon: Mail, tone: "pulse" },
-  { label: "Follow", href: "/follow", icon: Instagram, tone: "pulse" },
-  { label: "Privacy", href: "/privacy", icon: ShieldCheck, tone: "pulse" },
-  { label: "Terms", href: "/terms", icon: ShieldCheck, tone: "pulse" },
-  { label: "Admin", href: "/admin/feedback", icon: ShieldCheck, tone: "danger", adminOnly: true },
-];
-
 export default function AppDock() {
   const [location, navigate] = useLocation();
+  const { user, signOut } = useAuth();
   const [menu, setMenu] = useState<DockMenu>(null);
   const [activeGroup, setActiveGroup] = useState<"golf" | "gym" | null>(null);
   const [sportMode, setSportMode] = useState<OnboardingData["mainSport"]>("both");
@@ -124,11 +119,6 @@ export default function AppDock() {
     [golfEnabled]
   );
 
-  const filteredMoreItems = useMemo(
-    () => moreItems.filter((item) => !item.adminOnly || role === "admin"),
-    [role]
-  );
-
   function closeMenu() {
     setMenu(null);
     setActiveGroup(null);
@@ -144,6 +134,12 @@ export default function AppDock() {
     navigate(href);
   }
 
+  async function handleSignOut() {
+    closeMenu();
+    await signOut();
+    navigate("/auth");
+  }
+
   function handleArcItem(item: AppDockItem) {
     const group = item.group;
     if (group) {
@@ -157,7 +153,15 @@ export default function AppDock() {
 
   return (
     <>
-      {menu && (
+      {menu === "more" ? (
+        <MorePanel
+          email={user?.email || "Signed in"}
+          role={role}
+          closeMenu={closeMenu}
+          goTo={goTo}
+          signOut={handleSignOut}
+        />
+      ) : menu ? (
         <div className="fixed inset-0 z-50 bg-[radial-gradient(circle_at_50%_82%,rgba(19,200,203,0.22),transparent_34%),linear-gradient(180deg,rgba(10,56,92,0.94),rgba(4,16,32,0.96))] text-white backdrop-blur-md">
           <button
             type="button"
@@ -192,7 +196,7 @@ export default function AppDock() {
             )}
 
             <div className="pointer-events-auto relative h-[17rem] w-full">
-              {(menu === "activity" ? filteredActivityItems : menu === "create" ? filteredCreateItems : filteredMoreItems).map((item, index, items) => (
+              {(menu === "activity" ? filteredActivityItems : filteredCreateItems).map((item, index, items) => (
                 <ArcButton
                   key={item.label}
                   item={item}
@@ -206,7 +210,7 @@ export default function AppDock() {
             </div>
           </div>
         </div>
-      )}
+      ) : null}
 
       <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-white/12 bg-[#07111f]/96 px-3 pb-[calc(0.6rem+env(safe-area-inset-bottom))] pt-2 text-white shadow-[0_-18px_60px_rgba(0,0,0,0.34)] backdrop-blur-xl">
         <div className="grid grid-cols-5 items-center gap-1">
@@ -226,6 +230,117 @@ export default function AppDock() {
         </div>
       </nav>
     </>
+  );
+}
+
+function MorePanel({
+  email,
+  role,
+  closeMenu,
+  goTo,
+  signOut,
+}: {
+  email: string;
+  role: string;
+  closeMenu: () => void;
+  goTo: (href: string) => void;
+  signOut: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 bg-[#f3f6f8] text-[#101d2b]">
+      <div className="flex min-h-full flex-col pb-[calc(8.8rem+env(safe-area-inset-bottom))]">
+        <header className="bg-[#07111f] px-4 pb-5 pt-[calc(1rem+env(safe-area-inset-top))] text-white shadow-sm">
+          <div className="flex items-center justify-between">
+            <button
+              type="button"
+              onClick={closeMenu}
+              className="inline-flex h-12 w-12 items-center justify-center rounded-2xl text-white/90 active:bg-white/10"
+              aria-label="Close more menu"
+            >
+              <X className="h-7 w-7" />
+            </button>
+            <h2 className="text-3xl font-black tracking-tight">More</h2>
+            <span className="h-12 w-12" />
+          </div>
+        </header>
+
+        <div className="flex-1 overflow-y-auto">
+          <MoreRow icon={User} label="Edit Profile" onClick={() => goTo("/profile")} />
+          <MoreRow icon={KeyRound} label="Account settings" detail={email} trailingIcon={ExternalLink} onClick={() => goTo("/settings")} />
+          <MoreRow icon={ShieldCheck} label="Privacy settings" dot onClick={() => goTo("/privacy")} />
+
+          <MoreSection title="App" />
+          <MoreRow icon={Settings} label="Settings" onClick={() => goTo("/settings")} />
+          <MoreRow icon={CreditCard} label="Memberships" detail="Plans and access" onClick={() => goTo("/memberships")} />
+          <MoreRow icon={Instagram} label="Follow AthletiGolf" onClick={() => goTo("/follow")} />
+
+          <MoreSection title="Support" />
+          <MoreRow icon={Mail} label="Contact Us" onClick={() => goTo("/contact")} />
+          <MoreRow icon={ShieldCheck} label="Privacy Policy" onClick={() => goTo("/privacy")} />
+          <MoreRow icon={ShieldCheck} label="Terms" onClick={() => goTo("/terms")} />
+          {role === "admin" && <MoreRow icon={ShieldCheck} label="Admin feedback" detail="Tester notes" onClick={() => goTo("/admin/feedback")} />}
+          <MoreRow icon={LogOut} label="Log Out" accent onClick={signOut} />
+
+          <div className="px-6 pb-[calc(3rem+env(safe-area-inset-bottom))] pt-8 text-center text-sm font-semibold text-black/35">
+            <p>AthletiGolf app preview</p>
+            <button type="button" onClick={() => goTo("/terms")} className="mt-4 block w-full text-pulse underline">
+              Terms of Use
+            </button>
+            <button type="button" onClick={() => goTo("/privacy")} className="mt-2 block w-full text-pulse underline">
+              Privacy Policy
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MoreSection({ title }: { title: string }) {
+  return (
+    <div className="border-y border-black/5 bg-[#e9edf1] px-5 py-4">
+      <p className="text-xl font-black tracking-tight text-[#142231]">{title}</p>
+    </div>
+  );
+}
+
+function MoreRow({
+  icon: Icon,
+  label,
+  detail,
+  trailingIcon: TrailingIcon,
+  dot = false,
+  accent = false,
+  onClick,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  detail?: string;
+  trailingIcon?: React.ComponentType<{ className?: string }>;
+  dot?: boolean;
+  accent?: boolean;
+  onClick: () => void;
+}) {
+  const EndIcon = TrailingIcon || ChevronRight;
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex min-h-[5rem] w-full items-center gap-5 border-b border-black/7 bg-white px-5 text-left transition active:bg-black/[0.03]"
+    >
+      <span className={`inline-flex h-11 w-11 shrink-0 items-center justify-center ${accent ? "text-pulse" : "text-[#142231]"}`}>
+        <Icon className="h-8 w-8" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className={`block text-[1.34rem] font-medium leading-tight tracking-wide ${accent ? "text-pulse" : "text-[#142231]"}`}>
+          {label}
+        </span>
+        {detail && <span className="mt-1 block truncate text-base text-black/48">{detail}</span>}
+      </span>
+      {dot && <span className="mr-2 h-4 w-4 shrink-0 rounded-full bg-danger" />}
+      <EndIcon className="h-7 w-7 shrink-0 text-[#142231]" />
+    </button>
   );
 }
 

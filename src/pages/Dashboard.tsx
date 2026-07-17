@@ -1,16 +1,13 @@
 import { useEffect, useState } from "react";
-import { Link, useLocation } from "wouter";
+import { useLocation } from "wouter";
 import {
   Activity,
-  ArrowUpRight,
-  Brain,
   CalendarDays,
   Droplets,
   Dumbbell,
   Flag,
   Footprints,
   NotebookPen,
-  PlusCircle,
   Target,
   Trophy,
   Users,
@@ -29,7 +26,7 @@ import {
 } from "@/lib/golfStats";
 import { getTrainingIntelligence } from "@/lib/insights";
 import { todayIso as getTodayIso, isSameLocalIsoDate } from "@/lib/dates";
-import type { CardioSession, Competition, ExerciseLog, OnboardingData, Round, RoundHole, Workout } from "@/lib/types";
+import type { CardioSession, Competition, ExerciseLog, NutritionEntry, OnboardingData, Round, RoundHole, Workout } from "@/lib/types";
 import type { WellnessLog } from "@/lib/types";
 import type { LiveActivity } from "@/lib/types";
 import { defaultWellnessTargets, getWellnessTargets, type WellnessTargets } from "@/lib/wellnessTargets";
@@ -43,6 +40,7 @@ export default function Dashboard() {
   const [cardioSessions, setCardioSessions] = useState<CardioSession[]>([]);
   const [competitions, setCompetitions] = useState<Competition[]>([]);
   const [wellnessLogs, setWellnessLogs] = useState<WellnessLog[]>([]);
+  const [nutritionEntries, setNutritionEntries] = useState<NutritionEntry[]>([]);
   const [liveActivities, setLiveActivities] = useState<LiveActivity[]>([]);
   const [sportMode, setSportMode] = useState<OnboardingData["mainSport"]>("both");
   const [wellnessTargets, setWellnessTargets] = useState<WellnessTargets>(defaultWellnessTargets);
@@ -55,20 +53,22 @@ export default function Dashboard() {
 
   useEffect(() => {
     const load = async () => {
-      const [{ data: r }, { data: h }, { data: w }, { data: cardio }, { data: c }, { data: wellness }, { data: live }, { data: profile }] = await Promise.all([
+      const today = getTodayIso();
+      const [{ data: r }, { data: h }, { data: w }, { data: cardio }, { data: c }, { data: wellness }, { data: nutrition }, { data: live }, { data: profile }] = await Promise.all([
         supabase.from("rounds").select("*").order("created_at", { ascending: false }),
         supabase.from("round_holes").select("*").order("created_at", { ascending: false }),
         supabase.from("workouts").select("*").order("created_at", { ascending: false }),
         supabase.from("cardio_sessions").select("*").order("session_date", { ascending: false }).limit(30),
         supabase.from("competitions").select("*").eq("status", "upcoming").order("competition_date", { ascending: true }),
         supabase.from("daily_wellness_logs").select("*").order("log_date", { ascending: false }).limit(7),
+        supabase.from("nutrition_entries").select("*").eq("log_date", today).order("created_at", { ascending: false }),
         supabase
           .from("live_activities")
           .select("*")
           .is("ended_at", null)
           .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
           .order("started_at", { ascending: false })
-          .limit(1),
+          .limit(8),
         supabase.from("profiles").select("onboarding_data").maybeSingle(),
       ]);
       setRounds((r as Round[]) || []);
@@ -77,6 +77,7 @@ export default function Dashboard() {
       setCardioSessions((cardio as CardioSession[]) || []);
       setCompetitions((c as Competition[]) || []);
       setWellnessLogs((wellness as WellnessLog[]) || []);
+      setNutritionEntries((nutrition as NutritionEntry[]) || []);
       setLiveActivities((live as LiveActivity[]) || []);
       const onboarding = (profile?.onboarding_data as OnboardingData | null) || null;
       setSportMode(onboarding?.mainSport || "both");
@@ -107,6 +108,15 @@ export default function Dashboard() {
   const liveActivity = liveActivities[0] || null;
   const trainingOnly = sportMode === "training";
   const golfEnabled = !trainingOnly;
+  const greeting = getGreeting(now);
+  const friendlyDate = now.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
+  const nutritionTotals = getNutritionTotals(nutritionEntries);
+  const hasNutritionToday = nutritionEntries.length > 0 || Boolean(todayWellness?.calories || todayWellness?.protein_grams || todayWellness?.carbs_grams || todayWellness?.fats_grams);
+  const macroTotals = {
+    protein: nutritionTotals.protein || todayWellness?.protein_grams || 0,
+    carbs: nutritionTotals.carbs || todayWellness?.carbs_grams || 0,
+    fats: nutritionTotals.fats || todayWellness?.fats_grams || 0,
+  };
   const golfStats = getGolfStats(rounds);
   const shortGameStats = getShortGameStats(roundHoles);
   const trainingVolume = workouts.reduce(
@@ -118,14 +128,14 @@ export default function Dashboard() {
   const puttingControl = lowerIsBetterControl(golfStats.avgPutts, 30, 42);
   const highlight = getWeeklyHighlight(rounds, roundHoles, workouts, weekAgo);
   const trainingIntel = getTrainingIntelligence(workouts);
-  const checklist = buildDailyChecklist({
-    golfEnabled,
-    hasWellnessToday: todayWellness?.log_date === todayIso,
-    hasTrainingToday: workouts.some((workout) => isSameLocalIsoDate(workout.date || workout.created_at, todayIso)),
-    hasCardioToday: personalCardioSessions.some((session) => isSameLocalIsoDate(session.session_date, todayIso)),
-    hasRoundThisMonth: roundsThisMonth > 0,
-  });
-  const nextAction = checklist.find((item) => !item.done) || checklist[0];
+  const hasTrainingToday = workouts.some((workout) => isSameLocalIsoDate(workout.date || workout.created_at, todayIso));
+  const hasCardioToday = personalCardioSessions.some((session) => isSameLocalIsoDate(session.session_date, todayIso));
+  const hasRoundToday = golfEnabled && rounds.some((round) => isSameLocalIsoDate(round.date || round.created_at, todayIso));
+  const todayActivities = [
+    ...(hasRoundToday ? [{ label: "Round played", detail: getTodayRoundDetail(rounds, todayIso), tone: "golf" as const }] : []),
+    ...(hasTrainingToday ? [{ label: "Workout logged", detail: getTodayWorkoutDetail(workouts, todayIso), tone: "lab" as const }] : []),
+    ...(hasCardioToday ? [{ label: "Cardio done", detail: getTodayCardioDetail(personalCardioSessions, todayIso), tone: "pulse" as const }] : []),
+  ];
 
   const activity = [
     ...(golfEnabled ? rounds.slice(0, 3).map((round) => ({
@@ -155,18 +165,18 @@ export default function Dashboard() {
     <main className="min-h-screen bg-cream px-4 py-5 md:px-8 md:py-7">
       <section className="mb-5 grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
         <div className="overflow-hidden rounded-2xl border border-white/10 bg-dark text-white shadow-sm">
-          <div className="grid gap-6 p-5 lg:grid-cols-[1fr_220px] lg:p-7">
+          <div className="grid gap-6 p-5 lg:p-7">
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.22em] text-pulse">
-                AthletiGolf Performance
+                {friendlyDate}
               </p>
               <h1 className="mt-4 max-w-2xl text-3xl font-semibold leading-tight tracking-tight md:text-5xl">
-                {firstName}, here&apos;s the week.
+                {greeting}, {firstName}.
               </h1>
               <p className="mt-4 max-w-2xl text-sm leading-relaxed text-white/64 md:text-base">
                 {trainingOnly
-                  ? "Training load, progression and next actions in one tighter command view."
-                  : "Golf form, training load and next actions in one tighter command view."}
+                  ? "Here is today's training, wellness and cardio picture."
+                  : "Here is today's golf, training, wellness and cardio picture."}
               </p>
               <div className="mt-6 flex flex-wrap gap-2">
                 {golfEnabled && <Button variant="golf" onClick={() => navigate("/golf/submit")}><Flag className="h-4 w-4" />Round</Button>}
@@ -180,16 +190,43 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-2 lg:grid-cols-1">
-              <MiniMetric label={trainingOnly ? "Wellness Logs" : "Rounds Month"} value={loading ? "..." : trainingOnly ? wellnessLogs.length : roundsThisMonth} />
-              <MiniMetric label="Training Week" value={loading ? "..." : workoutsThisWeek} />
-              <MiniMetric label="Cardio Week" value={loading ? "..." : cardioThisWeek} />
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <HomeMetric
+                icon={Droplets}
+                label="Water today"
+                value={todayWellness?.water_litres ? `${todayWellness.water_litres} L` : "Not logged"}
+                detail={`Target ${wellnessTargets.waterLitres} L`}
+                progress={hydrationProgress}
+                onClick={() => navigate("/wellness")}
+              />
+              <HomeMetric
+                icon={Activity}
+                label="Nutrition"
+                value={hasNutritionToday ? `${nutritionTotals.calories || todayWellness?.calories || 0} kcal` : "No meals yet"}
+                detail={hasNutritionToday ? `P ${macroTotals.protein}g / C ${macroTotals.carbs}g / F ${macroTotals.fats}g` : "Log a meal to see macros"}
+                onClick={() => navigate("/wellness")}
+                visual={<MacroPie macros={macroTotals} />}
+              />
+              <HomeMetric
+                icon={Zap}
+                label="Today's activity"
+                value={todayActivities.length ? `${todayActivities.length} done` : "Quiet so far"}
+                detail={todayActivities[0]?.detail || "Rounds, workouts and cardio will appear here"}
+                onClick={() => navigate(todayActivities[0]?.tone === "golf" ? "/golf" : todayActivities[0]?.tone === "lab" ? "/gym/history" : "/fitness/cardio")}
+              />
+              <HomeMetric
+                icon={Users}
+                label="Friends"
+                value={liveActivities.length ? `${liveActivities.length} active` : "No one live"}
+                detail={liveActivities[0] ? `${getActivityLabel(liveActivities[0].activity_type)}${liveActivities[0].location_name ? ` / ${liveActivities[0].location_name}` : ""}` : "Friend activity will show here"}
+                onClick={() => navigate("/social")}
+              />
             </div>
           </div>
         </div>
 
         <Surface className="bg-panel/95">
-          <SectionTitle eyebrow="Today" title={now.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })} />
+          <SectionTitle eyebrow="Today" title="Live snapshot" />
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             {golfEnabled ? (
               <SummaryTile label="Last Round" value={lastRound ? `${lastRound.score ?? "-"}${lastRound.course ? ` / ${lastRound.course}` : ""}` : "No round"} tone="golf" />
@@ -250,34 +287,6 @@ export default function Dashboard() {
                 <h3 className="mt-1 font-semibold text-dark">{highlight.title}</h3>
                 <p className="mt-1 text-sm text-muted">{highlight.detail}</p>
               </div>
-            </div>
-          </div>
-          <div className="mt-3 rounded-xl border border-line bg-white/70 p-4">
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <div>
-                <p className="text-xs font-bold uppercase tracking-[0.16em] text-muted">Today checklist</p>
-                <h3 className="mt-1 font-semibold text-dark">Keep the data fresh</h3>
-              </div>
-              <StatusPill tone={checklist.every((item) => item.done) ? "golf" : "pulse"}>
-                {checklist.filter((item) => item.done).length}/{checklist.length}
-              </StatusPill>
-            </div>
-            <div className="grid gap-2 md:grid-cols-2">
-              {checklist.map((item) => (
-                <button
-                  key={item.label}
-                  type="button"
-                  onClick={() => navigate(item.href)}
-                  className={`rounded-lg border p-3 text-left transition ${
-                    item.done
-                      ? "border-golf/20 bg-golf/8"
-                      : "border-line bg-white hover:border-pulse/35"
-                  }`}
-                >
-                  <span className="block text-sm font-semibold text-dark">{item.label}</span>
-                  <span className="mt-1 block text-xs leading-relaxed text-muted">{item.detail}</span>
-                </button>
-              ))}
             </div>
           </div>
           {golfEnabled && nextCompetition && (
@@ -432,14 +441,14 @@ export default function Dashboard() {
             </div>
           </div>
           <p className="leading-relaxed text-white/68">
-            {nextAction?.done
-              ? "Daily basics are in. Open AthletiAI or analytics for a deeper read on what the week is saying."
-              : nextCompetition
-              ? `Next up: ${nextAction?.detail || "keep the day simple"} before ${nextCompetition.name}.`
-              : nextAction?.detail || "Start with one useful log so the dashboard has something to show."}
+            {todayActivities.length
+              ? "Good start today. Use AthletiAI or analytics to turn those logs into something useful."
+              : nextCompetition && golfEnabled
+              ? `Next up: keep today simple and prep for ${nextCompetition.name}.`
+              : "Start with one useful log today so the dashboard has something to work with."}
           </p>
           <div className="mt-6 grid gap-2">
-            {nextAction && <Button variant="pulse" onClick={() => navigate(nextAction.href)} className="w-full">{nextAction.cta}</Button>}
+            <Button variant="pulse" onClick={() => navigate("/wellness")} className="w-full">Open Wellness</Button>
             <Button variant="golf" onClick={() => navigate("/athletiai")} className="w-full">Open AthletiAI</Button>
             {golfEnabled ? (
               <Button variant="secondary" onClick={() => navigate("/analytics")} className="w-full border-white/15 bg-white/10 text-white hover:bg-white/15">Open Analytics</Button>
@@ -470,20 +479,6 @@ export default function Dashboard() {
             <EmptyState title="No activity yet" description="Rounds and training sessions will land here." />
           )}
         </Surface>
-
-        <Surface>
-          <SectionTitle eyebrow="Fast actions" title="Launchpad" />
-          <div className="grid gap-3 sm:grid-cols-2">
-            {golfEnabled && <Action href="/golf/submit" icon={Flag} title="Round" text="Scorecard entry" tone="golf" />}
-            <Action href="/workouts/submit" icon={Dumbbell} title="Training" text="Performance console" tone="pulse" />
-            <Action href="/fitness/cardio" icon={Footprints} title="Cardio" text="Run and walk logs" tone="lab" />
-            <Action href="/workouts" icon={PlusCircle} title="Board" text="Plan the week" tone="lab" />
-            <Action href="/wellness" icon={Droplets} title="Wellness" text="Hydration and recovery" tone="pulse" />
-            <Action href="/social" icon={Users} title="Social" text="Live check-ins" tone="pulse" />
-            <Action href="/athletiai" icon={Brain} title="AthletiAI" text={trainingOnly ? "Training read" : "Golf x training read"} tone="dark" />
-            {golfEnabled && <Action href="/analytics" icon={ArrowUpRight} title="Report" text="Review trends" tone="dark" />}
-          </div>
-        </Surface>
       </section>
 
     </main>
@@ -506,13 +501,102 @@ function MuscleBalance({ item, max }: { item: { muscle: string; volume: number }
 }
 
 
-function MiniMetric({ label, value }: { label: string; value: React.ReactNode }) {
+function HomeMetric({
+  icon: Icon,
+  label,
+  value,
+  detail,
+  progress,
+  visual,
+  onClick,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  value: React.ReactNode;
+  detail: string;
+  progress?: number;
+  visual?: React.ReactNode;
+  onClick: () => void;
+}) {
   return (
-    <div className="rounded-xl border border-white/10 bg-white/8 p-4">
-      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/45">{label}</p>
-      <p className="mt-3 text-3xl font-semibold">{value}</p>
-    </div>
+    <button
+      type="button"
+      onClick={onClick}
+      className="min-h-[148px] rounded-2xl border border-white/10 bg-white/8 p-4 text-left transition hover:border-white/20 hover:bg-white/12 active:scale-[0.99]"
+    >
+      <span className="flex items-start justify-between gap-3">
+        <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 text-pulse">
+          <Icon className="h-5 w-5" />
+        </span>
+        {visual}
+      </span>
+      <span className="mt-4 block text-[11px] font-bold uppercase tracking-[0.16em] text-white/45">{label}</span>
+      <span className="mt-2 block text-xl font-semibold leading-tight text-white">{value}</span>
+      <span className="mt-1 block text-sm leading-snug text-white/58">{detail}</span>
+      {progress !== undefined && (
+        <span className="mt-4 block h-1.5 overflow-hidden rounded-full bg-white/10">
+          <span className="block h-full rounded-full bg-pulse" style={{ width: `${Math.max(Math.min(progress, 100), 0)}%` }} />
+        </span>
+      )}
+    </button>
   );
+}
+
+function MacroPie({ macros }: { macros: { protein: number; carbs: number; fats: number } }) {
+  const total = macros.protein + macros.carbs + macros.fats;
+  if (!total) {
+    return <span className="h-12 w-12 rounded-full border border-white/15 bg-white/8" />;
+  }
+
+  const protein = (macros.protein / total) * 100;
+  const carbs = (macros.carbs / total) * 100;
+  const fats = (macros.fats / total) * 100;
+
+  return (
+    <span
+      aria-hidden="true"
+      className="h-12 w-12 rounded-full border border-white/10 shadow-inner"
+      style={{
+        background: `conic-gradient(#10bcd7 0 ${protein}%, #70d45f ${protein}% ${protein + carbs}%, #f2c14e ${protein + carbs}% ${protein + carbs + fats}%)`,
+      }}
+    />
+  );
+}
+
+function getGreeting(date: Date) {
+  const hour = date.getHours();
+  if (hour < 12) return "Good morning";
+  if (hour < 17) return "Good afternoon";
+  return "Good evening";
+}
+
+function getNutritionTotals(entries: NutritionEntry[]) {
+  return entries.reduce(
+    (totals, entry) => ({
+      calories: totals.calories + (entry.calories || 0),
+      protein: totals.protein + (entry.protein_grams || 0),
+      carbs: totals.carbs + (entry.carbs_grams || 0),
+      fats: totals.fats + (entry.fats_grams || 0),
+    }),
+    { calories: 0, protein: 0, carbs: 0, fats: 0 }
+  );
+}
+
+function getTodayRoundDetail(rounds: Round[], todayIso: string) {
+  const round = rounds.find((item) => isSameLocalIsoDate(item.date || item.created_at, todayIso));
+  if (!round) return "Round logged today";
+  return `${round.score ?? "-"} at ${round.course || "Unknown course"}`;
+}
+
+function getTodayWorkoutDetail(workouts: Workout[], todayIso: string) {
+  const workout = workouts.find((item) => isSameLocalIsoDate(item.date || item.created_at, todayIso));
+  return workout?.workout_name || "Training session logged";
+}
+
+function getTodayCardioDetail(cardioSessions: CardioSession[], todayIso: string) {
+  const session = cardioSessions.find((item) => isSameLocalIsoDate(item.session_date, todayIso));
+  if (!session) return "Cardio logged today";
+  return `${getCardioActivityLabel(session.activity_type)}${session.distance_km ? ` / ${session.distance_km} km` : ""}`;
 }
 
 function DarkStep({ label, value }: { label: string; value: React.ReactNode }) {
@@ -620,99 +704,6 @@ function LoadRow({ label, value, target }: { label: string; value: number; targe
       </div>
     </div>
   );
-}
-
-function Action({
-  href,
-  icon: Icon,
-  title,
-  text,
-  tone,
-}: {
-  href: string;
-  icon: React.ComponentType<{ className?: string }>;
-  title: string;
-  text: string;
-  tone: "golf" | "pulse" | "lab" | "dark";
-}) {
-  const toneClass =
-    tone === "golf"
-      ? "bg-golf/10 text-golf"
-      : tone === "pulse"
-      ? "bg-pulse/10 text-pulse"
-      : tone === "lab"
-      ? "bg-lab/10 text-lab"
-      : "bg-dark text-white";
-
-  return (
-    <Link href={href} className="group rounded-xl border border-line bg-white p-4 transition hover:border-steel/25">
-      <div className="mb-4 flex items-center justify-between">
-        <span className={`inline-flex h-10 w-10 items-center justify-center rounded-lg ${toneClass}`}>
-          <Icon className="h-5 w-5" />
-        </span>
-        <ArrowUpRight className="h-4 w-4 text-muted transition group-hover:text-dark" />
-      </div>
-      <h3 className="font-semibold text-dark">{title}</h3>
-      <p className="mt-1 text-sm text-muted">{text}</p>
-    </Link>
-  );
-}
-
-type ChecklistItem = {
-  label: string;
-  detail: string;
-  href: string;
-  cta: string;
-  done: boolean;
-};
-
-function buildDailyChecklist({
-  golfEnabled,
-  hasWellnessToday,
-  hasTrainingToday,
-  hasCardioToday,
-  hasRoundThisMonth,
-}: {
-  golfEnabled: boolean;
-  hasWellnessToday: boolean;
-  hasTrainingToday: boolean;
-  hasCardioToday: boolean;
-  hasRoundThisMonth: boolean;
-}): ChecklistItem[] {
-  return [
-    {
-      label: "Wellness",
-      detail: hasWellnessToday ? "Recovery is logged for today." : "Add water, sleep, mood and nutrition for today.",
-      href: "/wellness",
-      cta: hasWellnessToday ? "Review Wellness" : "Log Wellness",
-      done: hasWellnessToday,
-    },
-    {
-      label: "Training",
-      detail: hasTrainingToday ? "Training is logged for today." : "Log today's gym work or planned session.",
-      href: "/workouts/submit",
-      cta: hasTrainingToday ? "Review Training" : "Log Training",
-      done: hasTrainingToday,
-    },
-    {
-      label: "Cardio",
-      detail: hasCardioToday ? "Run or walk is logged for today." : "Add a run or walk so weekly load includes cardio.",
-      href: "/fitness/cardio",
-      cta: hasCardioToday ? "Review Cardio" : "Log Cardio",
-      done: hasCardioToday,
-    },
-    ...(golfEnabled
-      ? [
-          {
-            label: "Golf",
-            detail: hasRoundThisMonth ? "Golf data is active this month." : "Submit a round or practice log to refresh golf form.",
-            href: "/golf/submit",
-            cta: hasRoundThisMonth ? "Open Scorecard" : "Log Golf",
-            done: hasRoundThisMonth,
-          },
-        ]
-      : []),
-  ];
 }
 
 function getCardioActivityLabel(activity: CardioSession["activity_type"]) {

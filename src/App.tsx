@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/lib/supabase";
 import MobileSidebar from "@/components/MobileSidebar";
 import AppDock from "@/components/AppDock";
+import AppHeader from "@/components/AppHeader";
 import Landing from "@/pages/Landing";
 import AuthPage from "@/pages/Auth";
 import Privacy from "@/pages/Privacy";
@@ -107,16 +108,17 @@ function AppShell() {
 
  return (
   <div
-    className="min-h-screen bg-cream font-sans text-ink"
+    className={`min-h-screen bg-cream font-sans text-ink ${nativeApp ? "native-app" : ""}`}
     onBlurCapture={(event) => applyTextAutoFormatToField(event.target)}
   >
     {!hideSidebar && !nativeApp && <MobileSidebar />}
+    {showAppDock && <AppHeader />}
     <div
       className={
         hideSidebar
           ? ""
           : nativeApp
-          ? "min-h-screen pb-[calc(7.5rem+env(safe-area-inset-bottom))]"
+          ? "min-h-screen pt-[calc(5.25rem+env(safe-area-inset-top))] pb-[calc(7.5rem+env(safe-area-inset-bottom))]"
           : "min-h-screen pt-20 lg:pl-72"
       }
     >
