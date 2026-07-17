@@ -194,7 +194,7 @@ export function TextInput({ className, ...props }: InputHTMLAttributes<HTMLInput
   return (
     <input
       className={cn(
-        "w-full rounded-2xl border border-line bg-white px-4 py-3 text-sm outline-none transition placeholder:text-muted/60 focus:border-pulse/60 focus:ring-4 focus:ring-pulse/15",
+        "w-full rounded-2xl border border-line bg-white px-4 py-3 text-sm text-ink outline-none transition placeholder:text-muted/60 focus:border-pulse/60 focus:ring-4 focus:ring-pulse/15",
         className
       )}
       {...props}

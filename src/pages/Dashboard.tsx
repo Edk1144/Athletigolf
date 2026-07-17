@@ -13,7 +13,7 @@ import {
   Users,
   Zap,
 } from "lucide-react";
-import { Button, EmptyState, SectionTitle, StatusPill, Surface } from "@/components/ui";
+import { Button, EmptyState, SectionTitle, Surface } from "@/components/ui";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/lib/supabase";
 import {
@@ -24,7 +24,6 @@ import {
   getShortGameStats,
   lowerIsBetterControl,
 } from "@/lib/golfStats";
-import { getTrainingIntelligence } from "@/lib/insights";
 import { todayIso as getTodayIso, isSameLocalIsoDate } from "@/lib/dates";
 import type { CardioSession, Competition, ExerciseLog, NutritionEntry, OnboardingData, Round, RoundHole, Workout } from "@/lib/types";
 import type { WellnessLog } from "@/lib/types";
@@ -44,7 +43,6 @@ export default function Dashboard() {
   const [liveActivities, setLiveActivities] = useState<LiveActivity[]>([]);
   const [sportMode, setSportMode] = useState<OnboardingData["mainSport"]>("both");
   const [wellnessTargets, setWellnessTargets] = useState<WellnessTargets>(defaultWellnessTargets);
-  const [loading, setLoading] = useState(true);
 
   const firstName =
     user?.user_metadata?.username ||
@@ -82,30 +80,19 @@ export default function Dashboard() {
       const onboarding = (profile?.onboarding_data as OnboardingData | null) || null;
       setSportMode(onboarding?.mainSport || "both");
       setWellnessTargets(getWellnessTargets(onboarding));
-      setLoading(false);
     };
     load();
   }, []);
 
   const now = new Date();
   const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const workoutsThisWeek = workouts.filter((w) => new Date(w.created_at) >= weekAgo).length;
-  const roundsThisMonth = rounds.filter((r) => new Date(r.created_at) >= monthStart).length;
   const personalCardioSessions = cardioSessions;
-  const cardioThisWeek = personalCardioSessions.filter((session) => new Date(session.session_date) >= weekAgo).length;
-  const cardioDistanceThisWeek = personalCardioSessions
-    .filter((session) => new Date(session.session_date) >= weekAgo)
-    .reduce((sum, session) => sum + (session.distance_km || 0), 0);
-  const latestWorkout = workouts[0] ?? null;
-  const latestCardio = personalCardioSessions[0] ?? null;
-  const lastRound = rounds[0] ?? null;
   const nextCompetition = competitions[0] ?? null;
   const competitionToday = nextCompetition ? isToday(nextCompetition.competition_date) : false;
   const todayIso = getTodayIso();
   const todayWellness = wellnessLogs.find((log) => log.log_date === todayIso) || wellnessLogs[0] || null;
   const hydrationProgress = todayWellness?.water_litres ? Math.min((todayWellness.water_litres / wellnessTargets.waterLitres) * 100, 100) : 0;
-  const liveActivity = liveActivities[0] || null;
   const trainingOnly = sportMode === "training";
   const golfEnabled = !trainingOnly;
   const greeting = getGreeting(now);
@@ -117,9 +104,13 @@ export default function Dashboard() {
     carbs: nutritionTotals.carbs || todayWellness?.carbs_grams || 0,
     fats: nutritionTotals.fats || todayWellness?.fats_grams || 0,
   };
-  const golfStats = getGolfStats(rounds);
-  const shortGameStats = getShortGameStats(roundHoles);
-  const trainingVolume = workouts.reduce(
+  const recentRounds = rounds.slice(0, 5);
+  const recentRoundIds = new Set(recentRounds.map((round) => round.id));
+  const recentRoundHoles = roundHoles.filter((hole) => recentRoundIds.has(hole.round_id));
+  const golfStats = getGolfStats(recentRounds);
+  const shortGameStats = getShortGameStats(recentRoundHoles);
+  const weeklyWorkouts = workouts.filter((workout) => new Date(workout.date || workout.created_at) >= weekAgo);
+  const weeklyTrainingVolume = weeklyWorkouts.reduce(
     (sum, workout) =>
       sum + (workout.exercises || []).reduce((exerciseSum, exercise) => exerciseSum + (exercise.volume ?? 0), 0),
     0
@@ -127,7 +118,6 @@ export default function Dashboard() {
   const penaltyControl = lowerIsBetterControl(golfStats.avgPenaltyShots, 0, 4);
   const puttingControl = lowerIsBetterControl(golfStats.avgPutts, 30, 42);
   const highlight = getWeeklyHighlight(rounds, roundHoles, workouts, weekAgo);
-  const trainingIntel = getTrainingIntelligence(workouts);
   const hasTrainingToday = workouts.some((workout) => isSameLocalIsoDate(workout.date || workout.created_at, todayIso));
   const hasCardioToday = personalCardioSessions.some((session) => isSameLocalIsoDate(session.session_date, todayIso));
   const hasRoundToday = golfEnabled && rounds.some((round) => isSameLocalIsoDate(round.date || round.created_at, todayIso));
@@ -137,34 +127,10 @@ export default function Dashboard() {
     ...(hasCardioToday ? [{ label: "Cardio done", detail: getTodayCardioDetail(personalCardioSessions, todayIso), tone: "pulse" as const }] : []),
   ];
 
-  const activity = [
-    ...(golfEnabled ? rounds.slice(0, 3).map((round) => ({
-      id: `round-${round.id}`,
-      type: "Round",
-      title: `${round.score ?? "-"} at ${round.course || "Unknown Course"}`,
-      meta: round.date || new Date(round.created_at).toLocaleDateString("en-GB"),
-      tone: "golf" as const,
-    })) : []),
-    ...workouts.slice(0, 3).map((workout) => ({
-      id: `workout-${workout.id}`,
-      type: "Training",
-      title: workout.workout_name || "Performance Session",
-      meta: workout.date || new Date(workout.created_at).toLocaleDateString("en-GB"),
-      tone: "gym" as const,
-    })),
-    ...personalCardioSessions.slice(0, 2).map((session) => ({
-      id: `cardio-${session.id}`,
-      type: "Cardio",
-      title: `${getCardioActivityLabel(session.activity_type)}${session.distance_km ? ` / ${session.distance_km} km` : ""}`,
-      meta: session.session_date,
-      tone: "gym" as const,
-    })),
-  ].slice(0, 6);
-
   return (
     <main className="min-h-screen bg-cream px-4 py-5 md:px-8 md:py-7">
       <section className="mb-5 grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
-        <div className="overflow-hidden rounded-2xl border border-white/10 bg-dark text-white shadow-sm">
+        <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#102235] text-white shadow-sm">
           <div className="grid gap-6 p-5 lg:p-7">
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.22em] text-pulse">
@@ -226,58 +192,8 @@ export default function Dashboard() {
         </div>
 
         <Surface className="bg-panel/95">
-          <SectionTitle eyebrow="Today" title="Live snapshot" />
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            {golfEnabled ? (
-              <SummaryTile label="Last Round" value={lastRound ? `${lastRound.score ?? "-"}${lastRound.course ? ` / ${lastRound.course}` : ""}` : "No round"} tone="golf" />
-            ) : (
-              <SummaryTile label="Sport Mode" value="Fitness Tracking" tone="pulse" />
-            )}
-            <SummaryTile label="Last Training" value={latestWorkout?.workout_name || "No session"} tone="lab" />
-            <button
-              type="button"
-              onClick={() => navigate("/fitness/cardio")}
-              className="min-h-[116px] rounded-xl border border-lab/20 bg-lab/8 p-4 text-left transition hover:border-lab/40"
-            >
-              <p className="text-xs font-bold uppercase tracking-[0.16em] text-muted">Cardio</p>
-              <p className="mt-3 text-lg font-semibold leading-snug text-dark">
-                {latestCardio ? `${getCardioActivityLabel(latestCardio.activity_type)}${latestCardio.distance_km ? ` / ${latestCardio.distance_km} km` : ""}` : "No run or walk"}
-              </p>
-              <p className="mt-1 text-sm text-muted">
-                {cardioDistanceThisWeek ? `${cardioDistanceThisWeek.toFixed(1)} km this week` : "Log a run or walk"}
-              </p>
-            </button>
-            <button
-              type="button"
-              onClick={() => navigate("/wellness")}
-              className="min-h-[116px] rounded-xl border border-pulse/20 bg-pulse/8 p-4 text-left transition hover:border-pulse/40"
-            >
-              <p className="text-xs font-bold uppercase tracking-[0.16em] text-muted">Wellness</p>
-              <p className="mt-3 text-lg font-semibold leading-snug text-dark">
-                {todayWellness ? `${todayWellness.water_litres ?? "-"} L water` : "No log"}
-              </p>
-              <p className="mt-1 text-sm text-muted">
-                Target {wellnessTargets.waterLitres} L water
-              </p>
-              <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-steel/10">
-                <div className="h-full rounded-full bg-pulse" style={{ width: `${hydrationProgress}%` }} />
-              </div>
-            </button>
-            <button
-              type="button"
-              onClick={() => navigate("/social")}
-              className="min-h-[116px] rounded-xl border border-lab/20 bg-lab/8 p-4 text-left transition hover:border-lab/40"
-            >
-              <p className="text-xs font-bold uppercase tracking-[0.16em] text-muted">Live</p>
-              <p className="mt-3 text-lg font-semibold leading-snug text-dark">
-                {liveActivity ? getActivityLabel(liveActivity.activity_type) : "Offline"}
-              </p>
-              <p className="mt-2 text-sm text-muted">
-                {liveActivity?.location_name || "Check in with friends"}
-              </p>
-            </button>
-          </div>
-          <div className="mt-3 rounded-xl border border-pulse/20 bg-pulse/8 p-4">
+          <SectionTitle eyebrow="Week Signal" title="Top notes" />
+          <div className="rounded-xl border border-pulse/20 bg-pulse/8 p-4">
             <div className="flex items-start gap-3">
               <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-pulse/15 text-pulse">
                 <Trophy className="h-5 w-5" />
@@ -342,31 +258,10 @@ export default function Dashboard() {
         </section>
       )}
 
-      <section className="mb-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {golfEnabled ? (
-          <>
-            <Kpi label="Avg Score" value={formatAverage(golfStats.avgScore)} sub={`${rounds.length} rounds`} tone="golf" />
-            <Kpi label="FIR" value={formatPercent(golfStats.avgFairwayPercent)} sub="driving shape" tone="golf" />
-            <Kpi label="GIR" value={formatPercent(golfStats.avgGirPercent)} sub="approach control" tone="pulse" />
-            <Kpi label="Avg Drive" value={formatDistance(golfStats.avgDrivingDistance)} sub="distance tracked" tone="golf" />
-            <Kpi label="Up & Down" value={formatPercent(shortGameStats.upAndDownPercent)} sub={`${shortGameStats.upAndDowns}/${shortGameStats.chipChances} chip chances`} tone="golf" />
-            <Kpi label="Sand Save" value={formatPercent(shortGameStats.sandSavePercent)} sub={`${shortGameStats.sandSaves}/${shortGameStats.sandSaveChances} bunker chances`} tone="golf" />
-          </>
-        ) : (
-          <>
-            <Kpi label="Training Sessions" value={workouts.length} sub={`${workoutsThisWeek} this week`} tone="lab" />
-            <Kpi label="Total Volume" value={Math.round(trainingVolume)} sub="structured load tracked" tone="pulse" />
-            <Kpi label="Cardio" value={`${cardioDistanceThisWeek.toFixed(1)} km`} sub={`${cardioThisWeek} run/walk logs this week`} tone="lab" />
-            <Kpi label="Hydration" value={todayWellness?.water_litres ? `${todayWellness.water_litres} L` : "-"} sub={`target ${wellnessTargets.waterLitres} L`} tone="pulse" />
-            <Kpi label="Calories" value={todayWellness?.calories ?? "-"} sub={`target ${wellnessTargets.calories}`} tone="lab" />
-          </>
-        )}
-      </section>
-
       <section className="grid gap-5 xl:grid-cols-[1fr_1fr_0.8fr]">
         {golfEnabled && <Surface>
-          <SectionTitle eyebrow="Golf Form" title="Scoring profile" />
-          {rounds.length ? (
+          <SectionTitle eyebrow="Golf Form" title="Scoring profile" action={<span className="text-xs font-bold uppercase tracking-[0.14em] text-muted">Last 5 rounds</span>} />
+          {recentRounds.length ? (
             <div className="space-y-4">
               <Meter label="Fairways" value={formatPercent(golfStats.avgFairwayPercent)} color="bg-golf" />
               <Meter label="Average Drive" value={formatDistance(golfStats.avgDrivingDistance)} color="bg-golf" />
@@ -400,34 +295,22 @@ export default function Dashboard() {
         <Surface>
           <SectionTitle eyebrow="Performance Lab" title="Training load" />
           <div className="grid gap-3">
-            {[
-              ["This week", workoutsThisWeek, 4],
-              ["All sessions", workouts.length, Math.max(workouts.length, 1)],
-              ["Volume", Math.round(trainingVolume), Math.max(Math.round(trainingVolume), 1)],
-            ].map(([label, value, target]) => (
-              <LoadRow key={label as string} label={label as string} value={value as number} target={target as number} />
-            ))}
-          </div>
-          <div className="mt-5 rounded-xl border border-pulse/15 bg-pulse/8 p-4">
-            <p className="text-sm font-semibold text-dark">
-              {trainingIntel.topMuscle ? `Top load: ${trainingIntel.topMuscle.muscle}` : "Lab note"}
-            </p>
-            <p className="mt-1 text-sm leading-relaxed text-muted">
-              {trainingIntel.recommendation}
-            </p>
-            {trainingIntel.recentPr && (
-              <p className="mt-3 text-sm font-semibold text-lab">
-                Recent signal: {trainingIntel.recentPr.name} {trainingIntel.recentPr.weight} kg
+            <LoadRow label="Training sessions this week" value={workoutsThisWeek} target={4} />
+            <LoadRow label="Volume this week" value={Math.round(weeklyTrainingVolume)} target={Math.max(Math.round(weeklyTrainingVolume), 1)} suffix=" kg" />
+            <button
+              type="button"
+              onClick={() => navigate(hasTrainingToday ? "/gym/history" : "/workouts")}
+              className="rounded-xl border border-lab/20 bg-lab/8 p-4 text-left transition hover:border-lab/40"
+            >
+              <p className="text-sm font-medium text-muted">Today's session</p>
+              <h3 className="mt-2 text-lg font-semibold text-dark">
+                {hasTrainingToday ? getTodayWorkoutDetail(workouts, todayIso) : "Nothing logged yet"}
+              </h3>
+              <p className="mt-1 text-sm text-muted">
+                {hasTrainingToday ? "Open the logbook to review it." : "Open the board to see what is planned."}
               </p>
-            )}
+            </button>
           </div>
-          {trainingIntel.muscleVolumes.length > 0 && (
-            <div className="mt-5 space-y-3">
-              {trainingIntel.muscleVolumes.slice(0, 4).map((item) => (
-                <MuscleBalance key={item.muscle} item={item} max={trainingIntel.muscleVolumes[0]?.volume || 1} />
-              ))}
-            </div>
-          )}
         </Surface>
 
         <Surface className="bg-dark text-white">
@@ -459,44 +342,7 @@ export default function Dashboard() {
         </Surface>
       </section>
 
-      <section className="mt-5 grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
-        <Surface>
-          <SectionTitle eyebrow="Activity" title="Recent logbook" action={<Activity className="h-5 w-5 text-muted" />} />
-          {activity.length ? (
-            <div className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-white">
-              {activity.map((item) => (
-                <div key={item.id} className="grid gap-3 p-4 sm:grid-cols-[110px_1fr_auto] sm:items-center">
-                  <StatusPill tone={item.tone}>{item.type}</StatusPill>
-                  <div>
-                    <h3 className="font-semibold text-dark">{item.title}</h3>
-                    <p className="mt-1 text-sm text-muted">{item.meta}</p>
-                  </div>
-                  <Zap className="h-4 w-4 text-muted" />
-                </div>
-              ))}
-            </div>
-          ) : (
-            <EmptyState title="No activity yet" description="Rounds and training sessions will land here." />
-          )}
-        </Surface>
-      </section>
-
     </main>
-  );
-}
-
-function MuscleBalance({ item, max }: { item: { muscle: string; volume: number }; max: number }) {
-  const width = `${Math.min((item.volume / max) * 100, 100)}%`;
-  return (
-    <div>
-      <div className="mb-2 flex justify-between gap-3 text-sm">
-        <span className="font-medium text-muted">{item.muscle}</span>
-        <span className="font-semibold text-dark">{Math.round(item.volume)} kg</span>
-      </div>
-      <div className="h-2 rounded-full bg-steel/10">
-        <div className="h-full rounded-full bg-lab" style={{ width }} />
-      </div>
-    </div>
   );
 }
 
@@ -608,28 +454,6 @@ function DarkStep({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-function SummaryTile({ label, value, tone }: { label: string; value: string; tone: "golf" | "lab" | "pulse" }) {
-  const toneClass = tone === "golf" ? "border-golf/20 bg-golf/8" : tone === "lab" ? "border-lab/20 bg-lab/8" : "border-pulse/20 bg-pulse/8";
-  return (
-    <div className={`min-h-[116px] rounded-xl border p-4 ${toneClass}`}>
-      <p className="text-xs font-bold uppercase tracking-[0.16em] text-muted">{label}</p>
-      <p className="mt-3 text-lg font-semibold leading-snug text-dark">{value}</p>
-    </div>
-  );
-}
-
-function Kpi({ label, value, sub, tone }: { label: string; value: React.ReactNode; sub: string; tone: "golf" | "pulse" | "lab" }) {
-  const line = tone === "golf" ? "bg-golf" : tone === "pulse" ? "bg-pulse" : "bg-lab";
-  return (
-    <div className="rounded-xl border border-line bg-panel p-5 shadow-sm">
-      <div className={`mb-4 h-1 w-12 rounded-full ${line}`} />
-      <p className="text-sm font-medium text-muted">{label}</p>
-      <h2 className="mt-3 text-3xl font-semibold tracking-tight text-dark">{value}</h2>
-      <p className="mt-2 text-sm text-muted">{sub}</p>
-    </div>
-  );
-}
-
 function Meter({ label, value, color }: { label: string; value: string; color: string }) {
   const numericValue = Number.parseFloat(value);
   const width = value.includes("%") ? value : `${Math.min(numericValue * 0.4 || 20, 100)}%`;
@@ -691,13 +515,13 @@ function ControlMeter({
   );
 }
 
-function LoadRow({ label, value, target }: { label: string; value: number; target: number }) {
+function LoadRow({ label, value, target, suffix = "" }: { label: string; value: number; target: number; suffix?: string }) {
   const width = `${Math.min((value / target) * 100, 100)}%`;
   return (
     <div className="rounded-xl border border-line bg-white p-4">
       <div className="mb-2 flex items-center justify-between">
         <p className="text-sm font-medium text-muted">{label}</p>
-        <p className="font-semibold text-dark">{value}</p>
+        <p className="font-semibold text-dark">{value}{suffix}</p>
       </div>
       <div className="h-2 rounded-full bg-steel/10">
         <div className="h-full rounded-full bg-lab" style={{ width }} />

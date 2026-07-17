@@ -1,6 +1,12 @@
+import { useEffect } from "react";
 import { ChevronLeft } from "lucide-react";
 import { useLocation } from "wouter";
 import AppNotificationBell from "@/components/AppNotificationBell";
+
+const appRouteHistoryKey = "athletigolf-app-route-history";
+const appBackTargetKey = "athletigolf-app-back-target";
+const openMoreMenuEvent = "athletigolf-open-more-menu";
+const blockedBackRoutes = new Set(["/", "/auth", "/onboarding"]);
 
 const pageLabels: Array<{ match: RegExp; title: string; eyebrow: string }> = [
   { match: /^\/dashboard$/, title: "Dashboard", eyebrow: "Today" },
@@ -36,13 +42,42 @@ export default function AppHeader() {
     title: "AthletiGolf",
     eyebrow: "App",
   };
-  const canGoBack = typeof window !== "undefined" && window.history.length > 1;
+
+  useEffect(() => {
+    if (typeof window === "undefined" || blockedBackRoutes.has(location)) return;
+
+    const storedHistory = readAppRouteHistory();
+    const nextHistory = storedHistory[storedHistory.length - 1] === location
+      ? storedHistory
+      : [...storedHistory, location].slice(-12);
+
+    window.sessionStorage.setItem(appRouteHistoryKey, JSON.stringify(nextHistory));
+  }, [location]);
 
   function handleBack() {
-    if (canGoBack) {
-      window.history.back();
-      return;
+    if (typeof window !== "undefined") {
+      const backTarget = window.sessionStorage.getItem(appBackTargetKey);
+      if (backTarget === "more") {
+        window.sessionStorage.removeItem(appBackTargetKey);
+        window.dispatchEvent(new Event(openMoreMenuEvent));
+        navigate("/dashboard");
+        return;
+      }
+
+      const storedHistory = readAppRouteHistory();
+      const withoutCurrent = storedHistory.filter((route, index) => {
+        const isLastCurrent = index === storedHistory.length - 1 && route === location;
+        return !isLastCurrent && !blockedBackRoutes.has(route);
+      });
+      const previousRoute = [...withoutCurrent].reverse().find((route) => route !== location);
+
+      if (previousRoute) {
+        window.sessionStorage.setItem(appRouteHistoryKey, JSON.stringify([...withoutCurrent.filter((route) => route !== previousRoute), previousRoute].slice(-12)));
+        navigate(previousRoute);
+        return;
+      }
     }
+
     navigate("/dashboard");
   }
 
@@ -65,4 +100,15 @@ export default function AppHeader() {
       </div>
     </header>
   );
+}
+
+function readAppRouteHistory() {
+  if (typeof window === "undefined") return [];
+
+  try {
+    const parsed = JSON.parse(window.sessionStorage.getItem(appRouteHistoryKey) || "[]");
+    return Array.isArray(parsed) ? parsed.filter((route): route is string => typeof route === "string") : [];
+  } catch {
+    return [];
+  }
 }

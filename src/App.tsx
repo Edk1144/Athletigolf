@@ -5,7 +5,6 @@ import { supabase } from "@/lib/supabase";
 import MobileSidebar from "@/components/MobileSidebar";
 import AppDock from "@/components/AppDock";
 import AppHeader from "@/components/AppHeader";
-import Landing from "@/pages/Landing";
 import AuthPage from "@/pages/Auth";
 import Privacy from "@/pages/Privacy";
 import Terms from "@/pages/Terms";
@@ -28,6 +27,7 @@ import GymQuiz from "@/pages/GymQuiz";
 import GolfQuiz from "@/pages/GolfQuiz";
 import RoundTracker from "@/pages/RoundTracker";
 import ComingSoon from "@/pages/ComingSoon";
+import AppIntro from "@/pages/AppIntro";
 import { applyTextAutoFormatToField } from "@/lib/textFormatting";
 import { isNativeApp } from "@/lib/nativeApp";
 import { applyTheme, getStoredTheme } from "@/lib/theme";
@@ -50,14 +50,14 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
       </div>
     );
   }
-  if (!user) return <Redirect to="/auth" />;
+  if (!user) return <Redirect to="/app-intro" />;
   return <>{children}</>;
 }
 
 function AppShell() {
   const [location, navigate] = useLocation();
   const { user } = useAuth();
-  const hideSidebar = location === "/" || location === "/auth" || location === "/onboarding";
+  const hideSidebar = location === "/" || location === "/auth" || location === "/onboarding" || location === "/app-intro";
   const nativeApp = isNativeApp();
   const showAppDock = nativeApp && !hideSidebar;
 
@@ -127,7 +127,8 @@ function AppShell() {
         <ComingSoon />
       </Route>
 
-      <Route path="/" component={Landing} />
+      <Route path="/" component={AppIntro} />
+      <Route path="/app-intro" component={AppIntro} />
       <Route path="/auth" component={AuthPage} />
       <Route path="/privacy" component={Privacy} />
       <Route path="/terms" component={Terms} />

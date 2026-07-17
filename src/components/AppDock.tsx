@@ -73,6 +73,9 @@ const createItems: AppDockItem[] = [
   { label: "Cardio", href: "/fitness/cardio", icon: Footprints, tone: "gym" },
 ];
 
+const appBackTargetKey = "athletigolf-app-back-target";
+const openMoreMenuEvent = "athletigolf-open-more-menu";
+
 export default function AppDock() {
   const [location, navigate] = useLocation();
   const { user, signOut } = useAuth();
@@ -109,6 +112,16 @@ export default function AppDock() {
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, []);
 
+  useEffect(() => {
+    const openMore = () => {
+      setActiveGroup(null);
+      setMenu("more");
+    };
+
+    window.addEventListener(openMoreMenuEvent, openMore);
+    return () => window.removeEventListener(openMoreMenuEvent, openMore);
+  }, []);
+
   const filteredActivityItems = useMemo(
     () => activityItems.filter((item) => item.group !== "golf" || golfEnabled),
     [golfEnabled]
@@ -132,6 +145,11 @@ export default function AppDock() {
   function goTo(href: string) {
     closeMenu();
     navigate(href);
+  }
+
+  function goToFromMore(href: string) {
+    window.sessionStorage.setItem(appBackTargetKey, "more");
+    goTo(href);
   }
 
   async function handleSignOut() {
@@ -158,7 +176,7 @@ export default function AppDock() {
           email={user?.email || "Signed in"}
           role={role}
           closeMenu={closeMenu}
-          goTo={goTo}
+          goTo={goToFromMore}
           signOut={handleSignOut}
         />
       ) : menu ? (
@@ -247,7 +265,7 @@ function MorePanel({
   signOut: () => void;
 }) {
   return (
-    <div className="fixed inset-0 z-50 bg-[#f3f6f8] text-[#101d2b]">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-[#f3f6f8] text-[#101d2b]">
       <div className="flex min-h-full flex-col pb-[calc(8.8rem+env(safe-area-inset-bottom))]">
         <header className="bg-[#07111f] px-4 pb-5 pt-[calc(1rem+env(safe-area-inset-top))] text-white shadow-sm">
           <div className="flex items-center justify-between">
@@ -264,7 +282,7 @@ function MorePanel({
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto">
+        <div className="min-h-0 flex-1">
           <MoreRow icon={User} label="Edit Profile" onClick={() => goTo("/profile")} />
           <MoreRow icon={KeyRound} label="Account settings" detail={email} trailingIcon={ExternalLink} onClick={() => goTo("/settings")} />
           <MoreRow icon={ShieldCheck} label="Privacy settings" dot onClick={() => goTo("/privacy")} />
