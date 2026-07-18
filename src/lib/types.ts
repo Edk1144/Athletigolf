@@ -65,6 +65,8 @@ export type Round = {
   id: string;
   user_id: string;
   status?: "draft" | "unfinished" | "completed";
+  visibility?: "private" | "friends" | "team" | "public";
+  live_status?: "not_started" | "live" | "paused" | "finished";
   target_holes?: number | null;
   round_name?: string | null;
   golf_course_id?: string | null;
@@ -95,7 +97,155 @@ export type Round = {
   scramble_percentage: number | null;
   is_competition: boolean;
   notes: string | null;
+  started_at?: string | null;
+  finished_at?: string | null;
+  share_token?: string | null;
   completed_at?: string | null;
+  created_at: string;
+};
+
+export type RoundSide = {
+  id: string;
+  round_id: string;
+  name: string | null;
+  side_type: "individual" | "pair" | "team";
+  side_order: number;
+  created_at: string;
+};
+
+export type RoundPlayer = {
+  id: string;
+  round_id: string;
+  side_id: string | null;
+  user_id: string | null;
+  invited_by: string | null;
+  player_type: "owner" | "friend" | "guest";
+  display_name: string;
+  handicap: number | null;
+  course_handicap: number | null;
+  playing_handicap: number | null;
+  tee_name: string | null;
+  tee_colour: string | null;
+  player_order: number;
+  is_owner: boolean;
+  can_edit_scores: boolean;
+  created_at: string;
+};
+
+export type RoundPlayerHole = {
+  id: string;
+  round_id: string;
+  round_player_id: string;
+  side_id: string | null;
+  hole_number: number;
+  gross_score: number | null;
+  net_score: number | null;
+  stableford_points: number | null;
+  strokes_received: number;
+  picked_up: boolean;
+  conceded: boolean;
+  notes: string | null;
+  created_at: string;
+  updated_at?: string | null;
+};
+
+export type RoundGame = {
+  id: string;
+  round_id: string;
+  created_by: string | null;
+  game_type:
+    | "stroke_play"
+    | "medal"
+    | "stableford"
+    | "match_play"
+    | "skins"
+    | "four_ball_stroke"
+    | "four_ball_match"
+    | "foursomes"
+    | "scramble"
+    | "greensomes"
+    | "nassau"
+    | "custom";
+  scoring_basis: "gross" | "net" | "points" | "holes" | "skins" | "custom";
+  handicap_mode: "none" | "full" | "allowance" | "course_handicap" | "manual";
+  name: string | null;
+  settings: Record<string, unknown>;
+  status: "active" | "finished" | "cancelled";
+  created_at: string;
+};
+
+export type RoundGameHole = {
+  id: string;
+  round_game_id: string;
+  round_id: string;
+  hole_number: number;
+  winning_player_id: string | null;
+  winning_side_id: string | null;
+  result_label: string | null;
+  carryover_count: number;
+  points: Record<string, unknown>;
+  match_state: Record<string, unknown>;
+  created_at: string;
+};
+
+export type RoundGameResult = {
+  id: string;
+  round_game_id: string;
+  round_id: string;
+  round_player_id: string | null;
+  side_id: string | null;
+  position: number | null;
+  total_gross: number | null;
+  total_net: number | null;
+  total_points: number | null;
+  holes_won: number | null;
+  skins_won: number | null;
+  result_label: string | null;
+  result_payload: Record<string, unknown>;
+  created_at: string;
+};
+
+export type RoundWatcher = {
+  id: string;
+  round_id: string;
+  watcher_user_id: string;
+  role: "follower" | "coach" | "team" | "admin";
+  can_comment: boolean;
+  invited_by: string | null;
+  created_at: string;
+};
+
+export type RoundComment = {
+  id: string;
+  round_id: string;
+  hole_number: number | null;
+  author_user_id: string | null;
+  comment_type: "comment" | "coach_note" | "post_round_review";
+  body: string | null;
+  media_url: string | null;
+  created_at: string;
+  updated_at?: string | null;
+};
+
+export type RoundReaction = {
+  id: string;
+  round_id: string;
+  author_user_id: string | null;
+  target_type: "round" | "hole" | "player_hole" | "comment" | "media";
+  target_id: string | null;
+  hole_number: number | null;
+  reaction: "like" | "fire" | "poop";
+  created_at: string;
+};
+
+export type RoundMedia = {
+  id: string;
+  round_id: string;
+  hole_number: number | null;
+  uploaded_by: string | null;
+  media_type: "image" | "video";
+  url: string;
+  caption: string | null;
   created_at: string;
 };
 

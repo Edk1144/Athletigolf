@@ -16,6 +16,8 @@ import AthletiAI from "@/pages/AthletiAI";
 import Wellness from "@/pages/Wellness";
 import Social from "@/pages/Social";
 import FriendProfile from "@/pages/FriendProfile";
+import GolfHub from "@/pages/GolfHub";
+import GymHub from "@/pages/GymHub";
 import RoundHistory from "@/pages/RoundHistory";
 import Competitions from "@/pages/Competitions";
 import ArchivedSplits from "@/pages/ArchivedSplits";
@@ -179,6 +181,18 @@ function AppShell() {
         <Route path="/social/friends/:friendId">
           <ProtectedRoute>
             <FriendProfile />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/activity/golf">
+          <ProtectedRoute>
+            <GolfHub />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/activity/gym">
+          <ProtectedRoute>
+            <GymHub />
           </ProtectedRoute>
         </Route>
 
