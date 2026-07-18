@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { ArrowLeft, CheckCircle2, Flag, Save } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Flag, Flame, MessageCircle, Save, Trophy, UserPlus, Users } from "lucide-react";
 import GolfCoursePicker from "@/components/GolfCoursePicker";
 import { Button, Card, PageHeader, StatCard } from "@/components/ui";
 import { useAuth } from "@/hooks/useAuth";
@@ -9,6 +9,34 @@ import { supabase } from "@/lib/supabase";
 import type { FairwayResult, GolfCourseDetail, GolfCourseTee, Round, RoundHole, TeeShotLocation } from "@/lib/types";
 
 type Step = "setup" | "holes" | "review" | "saved";
+
+type LivePlayer = {
+  id: string;
+  name: string;
+  handicap: string;
+  type: "friend" | "guest";
+};
+
+type LiveGame =
+  | "stroke_play"
+  | "medal"
+  | "stableford"
+  | "match_play"
+  | "skins"
+  | "four_ball_stroke"
+  | "four_ball_match"
+  | "foursomes";
+
+const liveGameOptions: Array<{ id: LiveGame; label: string; detail: string }> = [
+  { id: "stroke_play", label: "Stroke play", detail: "Gross total" },
+  { id: "medal", label: "Medal", detail: "Strict gross/net scoring" },
+  { id: "stableford", label: "Stableford", detail: "Handicap points" },
+  { id: "match_play", label: "Match play", detail: "Hole-by-hole match" },
+  { id: "skins", label: "Skins", detail: "Hole prize carries" },
+  { id: "four_ball_stroke", label: "4BBB Stroke", detail: "Best ball total" },
+  { id: "four_ball_match", label: "4BBB Match", detail: "Best ball match" },
+  { id: "foursomes", label: "Foursomes", detail: "Alternate shot pairing" },
+];
 
 type Hole = {
   par: number;
@@ -62,6 +90,13 @@ export default function RoundTracker() {
   const [savedStatus, setSavedStatus] = useState<"completed" | "unfinished">("completed");
   const [holesPlayed, setHolesPlayed] = useState<9 | 18>(18);
   const [roundName, setRoundName] = useState("");
+  const [visibility, setVisibility] = useState<"private" | "friends">("friends");
+  const [ownHandicap, setOwnHandicap] = useState("");
+  const [livePlayers, setLivePlayers] = useState<LivePlayer[]>([]);
+  const [newPlayerName, setNewPlayerName] = useState("");
+  const [newPlayerHandicap, setNewPlayerHandicap] = useState("");
+  const [selectedGames, setSelectedGames] = useState<LiveGame[]>(["stroke_play"]);
+  const [playerHoleScores, setPlayerHoleScores] = useState<Record<string, string[]>>({});
   const [course, setCourse] = useState("");
   const [selectedCourse, setSelectedCourse] = useState<GolfCourseDetail | null>(null);
   const [selectedTee, setSelectedTee] = useState<GolfCourseTee | null>(null);
@@ -206,8 +241,68 @@ export default function RoundTracker() {
     }
   };
 
+  const addLivePlayer = () => {
+    const name = newPlayerName.trim();
+    if (!name) return;
+    const player: LivePlayer = {
+      id: `guest-${Date.now()}`,
+      name,
+      handicap: newPlayerHandicap.trim(),
+      type: "guest",
+    };
+    setLivePlayers((prev) => [...prev, player]);
+    setPlayerHoleScores((prev) => ({
+      ...prev,
+      [player.id]: Array.from({ length: holesPlayed }, () => ""),
+    }));
+    setPlayingPartners((prev) => {
+      const names = prev
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
+      return [...new Set([...names, name])].join(", ");
+    });
+    setNewPlayerName("");
+    setNewPlayerHandicap("");
+  };
+
+  const removeLivePlayer = (playerId: string) => {
+    setLivePlayers((prev) => prev.filter((player) => player.id !== playerId));
+    setPlayerHoleScores((prev) => {
+      const next = { ...prev };
+      delete next[playerId];
+      return next;
+    });
+  };
+
+  const toggleGame = (game: LiveGame) => {
+    setSelectedGames((prev) => {
+      if (prev.includes(game)) {
+        const next = prev.filter((item) => item !== game);
+        return next.length ? next : ["stroke_play"];
+      }
+      return [...prev, game];
+    });
+  };
+
+  const updatePlayerHoleScore = (playerId: string, holeIndex: number, score: string) => {
+    setPlayerHoleScores((prev) => {
+      const current = prev[playerId] || Array.from({ length: holesPlayed }, () => "");
+      return {
+        ...prev,
+        [playerId]: current.map((value, index) => (index === holeIndex ? score : value)),
+      };
+    });
+  };
+
   const startRound = () => {
     const nextHoles = createHoles(holesPlayed);
+    setPlayerHoleScores(
+      livePlayers.reduce<Record<string, string[]>>((acc, player) => {
+        acc[player.id] = Array.from({ length: holesPlayed }, () => "");
+        return acc;
+      }, {})
+    );
     if (selectedTee?.holes?.length) {
       setHoles(
         nextHoles.map((hole, index) => {
@@ -296,6 +391,44 @@ export default function RoundTracker() {
   const currentHole = holes[currentHoleIndex];
   const currentHoleScore =
     currentHole && currentHole.score !== "" ? Number(currentHole.score) - currentHole.par : null;
+  const liveLeaderboard = useMemo(() => {
+    const ownerCompleted = holes.filter((hole) => hole.score !== "");
+    const ownerScore = ownerCompleted.reduce((sum, hole) => sum + Number(hole.score), 0);
+    const ownerPar = ownerCompleted.reduce((sum, hole) => sum + hole.par, 0);
+    const rows = [
+      {
+        id: "owner",
+        name: "You",
+        score: ownerCompleted.length ? ownerScore : null,
+        toPar: ownerCompleted.length ? ownerScore - ownerPar : null,
+        holes: ownerCompleted.length,
+      },
+      ...livePlayers.map((player) => {
+        const scores = playerHoleScores[player.id] || [];
+        const completedScores = scores
+          .map((score, index) => ({ score: score === "" ? null : Number(score), par: holes[index]?.par ?? 4 }))
+          .filter((item) => item.score !== null);
+        const total = completedScores.reduce((sum, item) => sum + (item.score ?? 0), 0);
+        const par = completedScores.reduce((sum, item) => sum + item.par, 0);
+        return {
+          id: player.id,
+          name: player.name,
+          score: completedScores.length ? total : null,
+          toPar: completedScores.length ? total - par : null,
+          holes: completedScores.length,
+        };
+      }),
+    ];
+    return rows.sort((a, b) => {
+      if (a.score === null && b.score === null) return 0;
+      if (a.score === null) return 1;
+      if (b.score === null) return -1;
+      return a.score - b.score;
+    });
+  }, [holes, livePlayers, playerHoleScores]);
+  const selectedGameLabels = selectedGames
+    .map((game) => liveGameOptions.find((option) => option.id === game)?.label || game)
+    .join(", ");
 
   const goToNextHole = () => {
     setSaveError("");
@@ -336,11 +469,24 @@ export default function RoundTracker() {
     setSaving(true);
     setSaveError("");
 
+    const liveRoundSummary = buildLiveRoundSummary({
+      visibility,
+      ownHandicap,
+      games: selectedGameLabels,
+      players: livePlayers,
+      playerScores: playerHoleScores,
+      holes,
+    });
+
     const roundPayload = {
         user_id: user.id,
         status,
         target_holes: holesPlayed,
         completed_at: status === "completed" ? new Date().toISOString() : null,
+        visibility,
+        live_status: status === "completed" ? "finished" : stats.holesCompleted > 0 ? "paused" : "not_started",
+        started_at: stats.holesCompleted > 0 ? new Date().toISOString() : null,
+        finished_at: status === "completed" ? new Date().toISOString() : null,
         round_name: roundName || null,
         golf_course_id: selectedCourse?.cachedCourseId || null,
         golf_course_external_id: selectedCourse?.id || null,
@@ -366,10 +512,10 @@ export default function RoundTracker() {
         average_driving_distance: parseOptionalNumber(averageDrivingDistance),
         longest_drive: parseOptionalNumber(longestDrive),
         tee_shot_quality: teeShotQuality || null,
-        playing_partners: playingPartners || null,
+        playing_partners: playingPartners || livePlayers.map((player) => player.name).join(", ") || null,
         scramble_percentage: stats.scramblePercent,
         is_competition: competition,
-        notes: notes || null,
+        notes: [notes, liveRoundSummary].filter(Boolean).join("\n\n") || null,
     };
 
     const roundResult = existingRoundId
@@ -427,6 +573,13 @@ export default function RoundTracker() {
 
   const resetRound = () => {
     setRoundName("");
+    setVisibility("friends");
+    setOwnHandicap("");
+    setLivePlayers([]);
+    setNewPlayerName("");
+    setNewPlayerHandicap("");
+    setSelectedGames(["stroke_play"]);
+    setPlayerHoleScores({});
     setCourse("");
     setSelectedCourse(null);
     setSelectedTee(null);
@@ -482,8 +635,8 @@ export default function RoundTracker() {
       <div className="mx-auto max-w-7xl">
         <PageHeader
           eyebrow="Golf Form"
-          title="Round Scorecard"
-          description="Start with the round setup, then log each hole with the details that actually drive performance."
+          title="Live Round"
+          description="Set the group up, then score hole by hole while you play. Save it unfinished, review it after, or finish it as a scoring round."
           tone="text-golf"
         />
 
@@ -513,6 +666,83 @@ export default function RoundTracker() {
                 <p className="mb-2 text-sm opacity-70">Round Length</p>
                 <h2 className="text-3xl font-semibold">18 Holes</h2>
               </button>
+            </div>
+
+            <div className="mb-8 rounded-2xl border border-golf/20 bg-golf/5 p-5">
+              <div className="mb-5 flex items-start gap-3">
+                <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-golf text-white">
+                  <Flame className="h-5 w-5" />
+                </span>
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-golf">Live setup</p>
+                  <h2 className="mt-1 text-2xl font-semibold text-dark">Who can follow, who is playing, and what games are running?</h2>
+                </div>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <SelectField
+                  label="Round visibility"
+                  value={visibility}
+                  onChange={(value) => setVisibility(value as "private" | "friends")}
+                  options={["friends", "private"]}
+                />
+                <Field label="Your handicap" value={ownHandicap} onChange={setOwnHandicap} type="number" placeholder="Optional" />
+              </div>
+
+              <div className="mt-5 rounded-2xl border border-line bg-panel p-4">
+                <div className="mb-4 flex items-center gap-2">
+                  <Users className="h-5 w-5 text-golf" />
+                  <h3 className="font-semibold text-dark">Playing partners</h3>
+                </div>
+                <div className="grid gap-3 md:grid-cols-[1fr_140px_auto]">
+                  <Field label="Guest name" value={newPlayerName} onChange={setNewPlayerName} placeholder="Sam, Jack..." />
+                  <Field label="Handicap" value={newPlayerHandicap} onChange={setNewPlayerHandicap} type="number" placeholder="Optional" />
+                  <Button type="button" variant="golf" className="self-end" onClick={addLivePlayer}>
+                    <UserPlus className="h-4 w-4" />
+                    Add
+                  </Button>
+                </div>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <span className="rounded-full bg-dark px-3 py-1 text-xs font-bold text-white">
+                    You{ownHandicap ? ` / HCP ${ownHandicap}` : ""}
+                  </span>
+                  {livePlayers.map((player) => (
+                    <button
+                      key={player.id}
+                      type="button"
+                      onClick={() => removeLivePlayer(player.id)}
+                      className="rounded-full bg-golf/10 px-3 py-1 text-xs font-bold text-golf transition hover:bg-golf/15"
+                    >
+                      {player.name}{player.handicap ? ` / HCP ${player.handicap}` : ""} x
+                    </button>
+                  ))}
+                  {!livePlayers.length && <span className="text-sm text-muted">Add guests now. Friend search can plug into this later.</span>}
+                </div>
+              </div>
+
+              <div className="mt-5">
+                <p className="mb-3 text-sm font-semibold text-muted">Games running</p>
+                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                  {liveGameOptions.map((game) => {
+                    const active = selectedGames.includes(game.id);
+                    return (
+                      <button
+                        key={game.id}
+                        type="button"
+                        onClick={() => toggleGame(game.id)}
+                        className={`rounded-2xl border p-4 text-left transition ${
+                          active
+                            ? "border-golf bg-golf text-white"
+                            : "border-line bg-panel text-dark hover:border-golf/35"
+                        }`}
+                      >
+                        <span className="block text-sm font-semibold">{game.label}</span>
+                        <span className={`mt-1 block text-xs ${active ? "text-white/70" : "text-muted"}`}>{game.detail}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
@@ -610,7 +840,7 @@ export default function RoundTracker() {
                       {currentHole.score ? formatToPar(currentHoleScore ?? 0) : "Not scored"}
                     </h2>
                     <p className="mt-2 text-sm text-muted">
-                      Enter the hole details, skip ahead, or finish when you are ready to review.
+                      Enter the live basics now. Slower detail can be cleaned up in the review step after the round.
                     </p>
                     {(currentHole.yardage || currentHole.handicap) && (
                       <p className="mt-3 text-sm font-semibold text-golf">
@@ -646,6 +876,51 @@ export default function RoundTracker() {
                     Turn after this hole.
                   </div>
                 )}
+
+                <div className="mb-6 grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+                  <div className="rounded-2xl border border-line bg-panel p-4">
+                    <div className="mb-4 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        <Trophy className="h-5 w-5 text-golf" />
+                        <h3 className="font-semibold text-dark">Live leaderboard</h3>
+                      </div>
+                      <span className="rounded-full bg-golf/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.12em] text-golf">
+                        {visibility === "friends" ? "Friends" : "Private"}
+                      </span>
+                    </div>
+                    <div className="space-y-2">
+                      {liveLeaderboard.map((player, index) => (
+                        <div key={player.id} className="flex items-center justify-between gap-3 rounded-xl bg-white px-3 py-3">
+                          <div className="min-w-0">
+                            <p className="truncate font-semibold text-dark">{index + 1}. {player.name}</p>
+                            <p className="text-xs text-muted">{player.holes}/{holesPlayed} holes</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-lg font-semibold text-dark">{player.score ?? "-"}</p>
+                            <p className="text-xs font-bold text-golf">{player.toPar === null ? "-" : formatToParValue(player.toPar)}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-golf/20 bg-golf/5 p-4">
+                    <div className="mb-3 flex items-center gap-2">
+                      <MessageCircle className="h-5 w-5 text-golf" />
+                      <h3 className="font-semibold text-dark">Live round feed</h3>
+                    </div>
+                    <p className="text-sm leading-relaxed text-muted">
+                      V1 keeps this round friends-only and saves the live setup with the round. Comments, photos and reactions can plug into the live round tables once Bolt applies the social scoring migrations.
+                    </p>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {selectedGames.map((game) => (
+                        <span key={game} className="rounded-full bg-dark px-3 py-1 text-xs font-bold text-white">
+                          {liveGameOptions.find((option) => option.id === game)?.label || game}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
 
                 <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-4">
                   <SelectField
@@ -709,6 +984,25 @@ export default function RoundTracker() {
                     value={currentHole.putts}
                     onChange={(value) => updateHole(currentHoleIndex, "putts", value)}
                   />
+                  {livePlayers.map((player) => (
+                    <Field
+                      key={player.id}
+                      label={`${player.name} score`}
+                      type="number"
+                      value={playerHoleScores[player.id]?.[currentHoleIndex] || ""}
+                      onChange={(value) => updatePlayerHoleScore(player.id, currentHoleIndex, value)}
+                    />
+                  ))}
+                </div>
+
+                <div className="mt-5 rounded-2xl border border-gold/25 bg-gold/10 p-4">
+                  <div className="mb-3">
+                    <p className="text-xs font-bold uppercase tracking-[0.16em] text-gold">Post-round detail</p>
+                    <p className="mt-1 text-sm text-muted">
+                      Optional while you play. These are easier to tidy during review when the round is done.
+                    </p>
+                  </div>
+                  <div className="grid gap-3 md:grid-cols-3">
                   <Field
                     label="Penalties"
                     type="number"
@@ -731,6 +1025,7 @@ export default function RoundTracker() {
                       updateHole(currentHoleIndex, "greensideBunkerShots", value)
                     }
                   />
+                  </div>
                 </div>
 
                 <div className="mt-8 rounded-xl border border-line bg-panel p-3 lg:flex lg:items-center lg:justify-between">
@@ -959,6 +1254,51 @@ function Field({
       />
     </div>
   );
+}
+
+function buildLiveRoundSummary({
+  visibility,
+  ownHandicap,
+  games,
+  players,
+  playerScores,
+  holes,
+}: {
+  visibility: "private" | "friends";
+  ownHandicap: string;
+  games: string;
+  players: LivePlayer[];
+  playerScores: Record<string, string[]>;
+  holes: Hole[];
+}) {
+  const lines = [
+    "Live round setup",
+    `Visibility: ${visibility}`,
+    `Games: ${games || "Stroke play"}`,
+    ownHandicap ? `Your handicap: ${ownHandicap}` : "",
+  ].filter(Boolean);
+
+  if (players.length) {
+    lines.push("Playing partners:");
+    players.forEach((player) => {
+      const scores = (playerScores[player.id] || [])
+        .map((score, index) => {
+          if (!score) return null;
+          const hole = holes[index];
+          return `H${index + 1}: ${score}${hole ? ` (par ${hole.par})` : ""}`;
+        })
+        .filter(Boolean)
+        .join(", ");
+      lines.push(`- ${player.name}${player.handicap ? `, HCP ${player.handicap}` : ""}${scores ? ` / ${scores}` : ""}`);
+    });
+  }
+
+  return lines.join("\n");
+}
+
+function formatToParValue(score: number) {
+  if (score === 0) return "E";
+  return score > 0 ? `+${score}` : `${score}`;
 }
 
 function SelectField({

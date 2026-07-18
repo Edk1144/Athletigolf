@@ -1,12 +1,11 @@
-import { ArrowLeft, ExternalLink, ShieldCheck } from "lucide-react";
-import { useLocation, useRoute } from "wouter";
-import { Button, PageHeader, StatusPill, Surface } from "@/components/ui";
+import { ExternalLink, ShieldCheck } from "lucide-react";
+import { useRoute } from "wouter";
+import { PageHeader, StatusPill, Surface } from "@/components/ui";
 import { exerciseNameFromSlug, getExerciseGuideFromList } from "@/lib/exerciseLibrary";
 import { useExerciseLibrary } from "@/hooks/useExerciseLibrary";
 
 export default function ExerciseDetail() {
   const [, params] = useRoute("/exercises/:slug");
-  const [, navigate] = useLocation();
   const { exercises, bySlug } = useExerciseLibrary();
   const slug = params?.slug || "";
   const match = bySlug.get(slug);
@@ -20,12 +19,6 @@ export default function ExerciseDetail() {
         title={guide.name}
         description={guide.golfCarryover}
         tone="text-lab"
-        actions={
-          <Button type="button" variant="secondary" onClick={() => navigate("/workouts")}>
-            <ArrowLeft className="h-4 w-4" />
-            Training Board
-          </Button>
-        }
       />
 
       <div className="grid gap-5 xl:grid-cols-[1fr_360px]">

@@ -254,9 +254,9 @@ export default function RoundHistory() {
         <PageHeader
           eyebrow="Golf"
           title="Round History"
-          description="Review scoring, inspect hole-by-hole details, and keep your golf record clean."
+          description="Review finished scorecards, resume live rounds, and keep your golf record clean."
           tone="text-golf"
-          actions={<Button variant="golf" onClick={() => navigate("/golf/submit")}><Flag className="h-4 w-4" />Submit Round</Button>}
+          actions={<Button variant="golf" onClick={() => navigate("/golf/submit")}><Flag className="h-4 w-4" />Start Round</Button>}
         />
 
         <section className="mb-5 grid gap-4 md:grid-cols-4">
@@ -275,8 +275,8 @@ export default function RoundHistory() {
         {rounds.length === 0 ? (
           <EmptyState
             title="No rounds yet"
-            description="Submit your first round to start building your golf logbook."
-            action={<Button variant="golf" onClick={() => navigate("/golf/submit")}>Submit Round</Button>}
+            description="Start your first live round to begin building your golf logbook."
+            action={<Button variant="golf" onClick={() => navigate("/golf/submit")}>Start Round</Button>}
           />
         ) : (
           <Surface className="overflow-hidden p-0">
@@ -299,6 +299,7 @@ export default function RoundHistory() {
                       <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${round.is_competition ? "bg-gold/15 text-gold" : "bg-golf/10 text-golf"}`}>
                         {round.is_competition ? "Competition" : "General"}
                       </span>
+                      <RoundStatusBadge round={round} />
                       {!isCompleteScoringRound(round) && (
                         <span className="rounded-full bg-pulse/12 px-2.5 py-1 text-xs font-bold text-pulse">
                           Unfinished
@@ -377,6 +378,19 @@ function Metric({ label, value, danger = false }: { label: string; value: string
       <p className={`font-semibold ${danger ? "text-danger" : "text-dark"}`}>{value}</p>
     </div>
   );
+}
+
+function RoundStatusBadge({ round }: { round: Round }) {
+  if (round.live_status === "live") {
+    return <span className="rounded-full bg-golf px-2.5 py-1 text-xs font-bold text-white">Live</span>;
+  }
+  if (round.live_status === "paused") {
+    return <span className="rounded-full bg-gold/15 px-2.5 py-1 text-xs font-bold text-gold">Paused</span>;
+  }
+  if (round.live_status === "finished") {
+    return <span className="rounded-full bg-steel/10 px-2.5 py-1 text-xs font-bold text-muted">Finished</span>;
+  }
+  return null;
 }
 
 function RoundDetailsDrawer({

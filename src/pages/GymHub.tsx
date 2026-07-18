@@ -45,8 +45,8 @@ const gymItems: GymHubItem[] = [
   },
   {
     label: "Exercise Library",
-    description: "Use the database from the split builder and workout flow.",
-    href: "/workouts",
+    description: "Search movements and open full exercise guide pages.",
+    href: "/exercises",
     icon: Library,
     tone: "bg-cyan-400/15 text-cyan-100 border-cyan-200/20",
   },

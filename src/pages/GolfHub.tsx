@@ -6,6 +6,7 @@ import {
   ChevronRight,
   ClipboardList,
   Flag,
+  History,
   MessageCircle,
   NotebookPen,
   Shield,
@@ -43,6 +44,13 @@ const golfItems: GolfHubItem[] = [
     href: "/golf/practice",
     icon: NotebookPen,
     tone: "bg-cyan-400/15 text-cyan-100 border-cyan-200/20",
+  },
+  {
+    label: "Practice History",
+    description: "Review sim, range, short-game and on-course sessions.",
+    href: "/golf/practice-history",
+    icon: History,
+    tone: "bg-teal-400/15 text-teal-100 border-teal-200/20",
   },
   {
     label: "Practice Plan",

@@ -24,6 +24,7 @@ import ArchivedSplits from "@/pages/ArchivedSplits";
 import CreateSplit from "@/pages/CreateSplit";
 import SubmitSession from "@/pages/SubmitSession";
 import ExerciseDetail from "@/pages/ExerciseDetail";
+import ExerciseLibrary from "@/pages/ExerciseLibrary";
 import Cardio from "@/pages/Cardio";
 import GymQuiz from "@/pages/GymQuiz";
 import GolfQuiz from "@/pages/GolfQuiz";
@@ -241,6 +242,12 @@ function AppShell() {
         <Route path="/fitness/cardio">
           <ProtectedRoute>
             <Cardio />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/exercises">
+          <ProtectedRoute>
+            <ExerciseLibrary />
           </ProtectedRoute>
         </Route>
 
