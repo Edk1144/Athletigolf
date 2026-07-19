@@ -438,12 +438,22 @@ export default function Social() {
             {searchResults.map((result) => (
               <div key={result.user_id} className="rounded-xl border border-line bg-white/70 p-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <p className="font-semibold text-dark">@{result.username || "unknown"}</p>
-                    {result.display_name && <p className="mt-1 text-sm text-muted">{result.display_name}</p>}
-                    <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-muted">
-                      {getSearchStatusLabel(result)}
-                    </p>
+                  <div className="flex min-w-0 items-center gap-3">
+                    <SocialAvatar src={result.avatar_url} name={result.display_name || result.username || "Friend"} />
+                    <div className="min-w-0">
+                      <p className="truncate font-semibold text-dark">@{result.username || "unknown"}</p>
+                      {result.display_name && <p className="mt-1 truncate text-sm text-muted">{result.display_name}</p>}
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">
+                          {getSearchStatusLabel(result)}
+                        </p>
+                        {result.golf_handicap !== null && result.golf_handicap !== undefined && (
+                          <span className="rounded-full bg-golf/10 px-2.5 py-1 text-xs font-bold text-golf">
+                            HCP {Number(result.golf_handicap).toFixed(1)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </div>
                   {result.relationship_direction === "none" ? (
                     <Button type="button" variant="secondary" onClick={() => sendFriendRequestTo(result.user_id)} disabled={saving}>
@@ -667,9 +677,14 @@ function ConnectionSection({
           {connections.map((connection) => {
             const otherId = getOtherUserId(connection, userId);
             const label = getConnectionLabel(connection, userId);
+            const username = "other_username" in connection ? connection.other_username : null;
+            const avatarUrl = "other_avatar_url" in connection ? connection.other_avatar_url : null;
+            const handicap = "other_golf_handicap" in connection ? connection.other_golf_handicap : null;
             return (
               <div key={connection.id} className="grid gap-3 p-4 md:grid-cols-[1fr_120px_auto] md:items-center">
-                <div>
+                <div className="flex min-w-0 items-start gap-3">
+                  <SocialAvatar src={avatarUrl} name={label} />
+                  <div className="min-w-0 flex-1">
                   {editingFriendId === connection.id ? (
                     <div className="flex flex-col gap-2 sm:flex-row">
                       <TextInput value={friendLabel} onChange={(event) => setFriendLabel(event.target.value)} placeholder="Friend nickname" />
@@ -699,7 +714,16 @@ function ConnectionSection({
                       </button>
                     </div>
                   )}
-                  <p className="mt-1 truncate text-sm text-muted">{otherId}</p>
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted">
+                    {username && <span className="truncate">@{username}</span>}
+                    {handicap !== null && handicap !== undefined && (
+                      <span className="rounded-full bg-golf/10 px-2.5 py-1 text-xs font-bold text-golf">
+                        HCP {Number(handicap).toFixed(1)}
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-1 truncate text-xs text-muted">{otherId}</p>
+                  </div>
                 </div>
                 <span className={getConnectionClass(connection.status)}>{connection.status}</span>
                 <div className="flex flex-wrap gap-2 md:justify-end">{action(connection)}</div>
@@ -711,6 +735,15 @@ function ConnectionSection({
         <p className="rounded-xl border border-dashed border-line bg-white/45 p-4 text-sm text-muted">{empty}</p>
       )}
     </div>
+  );
+}
+
+function SocialAvatar({ src, name }: { src?: string | null; name: string }) {
+  const initial = name.trim().charAt(0).toUpperCase() || "A";
+  return (
+    <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-pulse/15 bg-pulse/10 text-sm font-bold text-pulse">
+      {src ? <img src={src} alt="" className="h-full w-full object-cover" /> : initial}
+    </span>
   );
 }
 

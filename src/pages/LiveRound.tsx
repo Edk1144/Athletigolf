@@ -192,9 +192,13 @@ export default function LiveRound() {
               {leaderRows.map((row, index) => (
                 <div key={row.player.id} className="rounded-2xl border border-line bg-panel p-4">
                   <div className="mb-3 flex items-center justify-between gap-3">
-                    <div>
-                      <p className="font-semibold">{index + 1}. {row.player.display_name}</p>
-                      <p className="text-xs text-muted">{row.player.is_owner ? "Owner" : row.player.player_type}{row.player.handicap !== null ? ` / HCP ${row.player.handicap}` : ""}</p>
+                    <div className="flex min-w-0 items-center gap-3">
+                      <RoundAvatar src={row.player.avatar_url} name={row.player.display_name} />
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold">{index + 1}. {row.player.display_name}</p>
+                        {row.player.username && <p className="truncate text-xs font-semibold text-golf">@{row.player.username}</p>}
+                        <p className="text-xs text-muted">{row.player.is_owner ? "Owner" : row.player.player_type}{row.player.handicap !== null ? ` / HCP ${row.player.handicap}` : ""}</p>
+                      </div>
                     </div>
                     <div className="text-right">
                       <p className="text-2xl font-semibold">{row.total ?? "-"}</p>
@@ -265,7 +269,8 @@ export default function LiveRound() {
             <div className="mb-4 flex flex-wrap gap-2">
               {reactionOptions.map((option) => (
                 <Button key={option.id} variant="secondary" onClick={() => sendReaction(option.id)}>
-                  <span aria-hidden="true">{option.label}</span>
+                  <option.icon className="h-4 w-4" />
+                  {getReactionLabel(option.id)}
                   {reactions.filter((reaction) => reaction.reaction === option.id).length}
                 </Button>
               ))}
@@ -321,6 +326,21 @@ export default function LiveRound() {
 function formatStatus(status?: string | null) {
   if (!status) return "Saved";
   return status.replaceAll("_", " ");
+}
+
+function RoundAvatar({ src, name }: { src?: string | null; name: string }) {
+  const initial = name.trim().charAt(0).toUpperCase() || "A";
+  return (
+    <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-golf/15 bg-golf/10 text-sm font-bold text-golf">
+      {src ? <img src={src} alt="" className="h-full w-full object-cover" /> : initial}
+    </span>
+  );
+}
+
+function getReactionLabel(reaction: "like" | "fire" | "poop") {
+  if (reaction === "fire") return "Fire";
+  if (reaction === "poop") return "Oops";
+  return "Like";
 }
 
 function formatGame(game: string) {

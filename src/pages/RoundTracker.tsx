@@ -6,7 +6,7 @@ import { Button, Card, PageHeader, StatCard } from "@/components/ui";
 import { useAuth } from "@/hooks/useAuth";
 import { todayIso } from "@/lib/dates";
 import { supabase } from "@/lib/supabase";
-import type { FairwayResult, GolfCourseDetail, GolfCourseTee, Round, RoundHole, TeeShotLocation } from "@/lib/types";
+import type { FairwayResult, FriendConnectionProfile, GolfCourseDetail, GolfCourseTee, Profile, Round, RoundHole, TeeShotLocation } from "@/lib/types";
 
 type Step = "setup" | "holes" | "review" | "saved";
 
@@ -16,6 +16,9 @@ type LivePlayer = {
   handicap: string;
   type: "friend" | "guest";
   team: "A" | "B";
+  userId?: string | null;
+  username?: string | null;
+  avatarUrl?: string | null;
 };
 
 type LiveParticipant = {
@@ -24,6 +27,9 @@ type LiveParticipant = {
   handicap: string;
   type: "owner" | "friend" | "guest";
   team: "A" | "B";
+  userId?: string | null;
+  username?: string | null;
+  avatarUrl?: string | null;
 };
 
 type MatchDecision = {
@@ -75,6 +81,18 @@ type LiveGameResultRow = {
   skins_won: number | null;
   result_label: string;
   result_payload: Record<string, unknown>;
+};
+
+type LiveGameHoleRow = {
+  round_game_id: string;
+  round_id: string;
+  hole_number: number;
+  winning_player_id: string | null;
+  winning_side_id: string | null;
+  result_label: string;
+  carryover_count: number;
+  points: Record<string, unknown>;
+  match_state: Record<string, unknown>;
 };
 
 const liveGameOptions: Array<{ id: LiveGame; label: string; detail: string }> = [
@@ -142,6 +160,8 @@ export default function RoundTracker() {
   const [roundName, setRoundName] = useState("");
   const [visibility, setVisibility] = useState<"private" | "friends">("friends");
   const [ownHandicap, setOwnHandicap] = useState("");
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [friends, setFriends] = useState<FriendConnectionProfile[]>([]);
   const [livePlayers, setLivePlayers] = useState<LivePlayer[]>([]);
   const [newPlayerName, setNewPlayerName] = useState("");
   const [newPlayerHandicap, setNewPlayerHandicap] = useState("");
@@ -240,6 +260,30 @@ export default function RoundTracker() {
     };
   }, [user]);
 
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+
+    async function loadRoundSocialData() {
+      const [{ data: profileData }, { data: friendData }] = await Promise.all([
+        supabase.from("profiles").select("*").maybeSingle(),
+        supabase.rpc("get_friend_connections_with_profiles"),
+      ]);
+      if (cancelled) return;
+      const nextProfile = profileData as Profile | null;
+      setProfile(nextProfile);
+      setFriends(((friendData as FriendConnectionProfile[]) || []).filter((friend) => friend.status === "accepted"));
+      setOwnHandicap((current) =>
+        current || nextProfile?.golf_handicap === null || nextProfile?.golf_handicap === undefined ? current : String(nextProfile.golf_handicap)
+      );
+    }
+
+    loadRoundSocialData();
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
   const updateHole = <K extends keyof Hole>(index: number, field: K, value: Hole[K]) => {
     const updatedHole = { ...holes[index], [field]: value };
     if (field === "par" && value === 3) {
@@ -303,6 +347,9 @@ export default function RoundTracker() {
       handicap: newPlayerHandicap.trim(),
       type: "guest",
       team: livePlayers.length % 2 === 0 ? "B" : "A",
+      userId: null,
+      username: null,
+      avatarUrl: null,
     };
     setLivePlayers((prev) => [...prev, player]);
     setPlayerHoleScores((prev) => ({
@@ -318,6 +365,33 @@ export default function RoundTracker() {
     });
     setNewPlayerName("");
     setNewPlayerHandicap("");
+  };
+
+  const addFriendPlayer = (friend: FriendConnectionProfile) => {
+    if (livePlayers.some((player) => player.userId === friend.other_user_id)) return;
+    const name = friend.other_display_name || (friend.other_username ? `@${friend.other_username}` : `Friend ${friend.other_user_id.slice(0, 8)}`);
+    const player: LivePlayer = {
+      id: `friend-${friend.other_user_id}`,
+      name,
+      handicap: friend.other_golf_handicap === null || friend.other_golf_handicap === undefined ? "" : String(friend.other_golf_handicap),
+      type: "friend",
+      team: livePlayers.length % 2 === 0 ? "B" : "A",
+      userId: friend.other_user_id,
+      username: friend.other_username,
+      avatarUrl: friend.other_avatar_url,
+    };
+    setLivePlayers((prev) => [...prev, player]);
+    setPlayerHoleScores((prev) => ({
+      ...prev,
+      [player.id]: Array.from({ length: holesPlayed }, () => ""),
+    }));
+    setPlayingPartners((prev) => {
+      const names = prev
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
+      return [...new Set([...names, name])].join(", ");
+    });
   };
 
   const removeLivePlayer = (playerId: string) => {
@@ -465,12 +539,22 @@ export default function RoundTracker() {
   const currentHole = holes[currentHoleIndex];
   const currentHoleScore =
     currentHole && currentHole.score !== "" ? Number(currentHole.score) - currentHole.par : null;
+  const ownerDisplayName = profile?.full_name || (profile?.username ? `@${profile.username}` : "You");
   const liveParticipants = useMemo<LiveParticipant[]>(
     () => [
-      { id: "owner", name: "You", handicap: ownHandicap, type: "owner", team: "A" },
+      {
+        id: "owner",
+        name: ownerDisplayName,
+        handicap: ownHandicap,
+        type: "owner",
+        team: "A",
+        userId: user?.id || null,
+        username: profile?.username || null,
+        avatarUrl: profile?.avatar_url || null,
+      },
       ...livePlayers,
     ],
-    [livePlayers, ownHandicap]
+    [livePlayers, ownHandicap, ownerDisplayName, profile?.avatar_url, profile?.username, user?.id]
   );
   const hasTeamGame = selectedGames.some((game) =>
     ["four_ball_stroke", "four_ball_match", "foursomes"].includes(game)
@@ -496,7 +580,8 @@ export default function RoundTracker() {
     const rows = [
       {
         id: "owner",
-        name: "You",
+        name: ownerDisplayName,
+        avatarUrl: profile?.avatar_url || null,
         score: ownerCompleted.length ? ownerScore : null,
         toPar: ownerCompleted.length ? ownerScore - ownerPar : null,
         holes: ownerCompleted.length,
@@ -511,6 +596,7 @@ export default function RoundTracker() {
         return {
           id: player.id,
           name: player.name,
+          avatarUrl: player.avatarUrl || null,
           score: completedScores.length ? total : null,
           toPar: completedScores.length ? total - par : null,
           holes: completedScores.length,
@@ -523,7 +609,7 @@ export default function RoundTracker() {
       if (b.score === null) return -1;
       return a.score - b.score;
     });
-  }, [holes, livePlayers, playerHoleScores]);
+  }, [holes, livePlayers, ownerDisplayName, playerHoleScores, profile?.avatar_url]);
   const matchState = useMemo(
     () => calculateMatchState(holes, liveParticipants, playerHoleScores, holesPlayed),
     [holes, liveParticipants, playerHoleScores, holesPlayed]
@@ -858,7 +944,7 @@ export default function RoundTracker() {
                         <div>
                           <p className="font-semibold text-dark">{player.name}</p>
                           <p className="text-xs text-muted">
-                            {player.type === "owner" ? "You" : "Guest"}{player.handicap ? ` / HCP ${player.handicap}` : ""}
+                            {player.type === "owner" ? "You" : player.type === "friend" ? "Friend" : "Guest"}{player.handicap ? ` / HCP ${player.handicap}` : ""}
                           </p>
                         </div>
                         <div className="grid grid-cols-2 gap-2">
@@ -895,6 +981,41 @@ export default function RoundTracker() {
                   <Users className="h-5 w-5 text-golf" />
                   <h3 className="font-semibold text-dark">Playing partners</h3>
                 </div>
+                {friends.length > 0 && (
+                  <div className="mb-5">
+                    <p className="mb-3 text-xs font-bold uppercase tracking-[0.14em] text-muted">Add friends</p>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {friends.slice(0, 6).map((friend) => {
+                        const alreadyAdded = livePlayers.some((player) => player.userId === friend.other_user_id);
+                        const friendName = friend.other_display_name || (friend.other_username ? `@${friend.other_username}` : `Friend ${friend.other_user_id.slice(0, 8)}`);
+                        return (
+                          <button
+                            key={friend.other_user_id}
+                            type="button"
+                            disabled={alreadyAdded}
+                            onClick={() => addFriendPlayer(friend)}
+                            className="flex items-center justify-between gap-3 rounded-xl border border-line bg-white/70 p-3 text-left transition hover:border-golf/40 disabled:opacity-55"
+                          >
+                            <span className="flex min-w-0 items-center gap-3">
+                              <PlayerAvatar src={friend.other_avatar_url} name={friendName} />
+                              <span className="min-w-0">
+                                <span className="block truncate text-sm font-semibold text-dark">{friendName}</span>
+                                <span className="block text-xs text-muted">
+                                  {friend.other_golf_handicap === null || friend.other_golf_handicap === undefined
+                                    ? "No handicap set"
+                                    : `HCP ${friend.other_golf_handicap}`}
+                                </span>
+                              </span>
+                            </span>
+                            <span className="shrink-0 rounded-full bg-golf/10 px-2.5 py-1 text-xs font-bold text-golf">
+                              {alreadyAdded ? "Added" : "Add"}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
                 <div className="grid gap-3 md:grid-cols-[1fr_140px_auto]">
                   <Field label="Guest name" value={newPlayerName} onChange={setNewPlayerName} placeholder="Sam, Jack..." />
                   <Field label="Handicap" value={newPlayerHandicap} onChange={setNewPlayerHandicap} type="number" placeholder="Optional" />
@@ -905,7 +1026,7 @@ export default function RoundTracker() {
                 </div>
                 <div className="mt-4 flex flex-wrap gap-2">
                   <span className="rounded-full bg-dark px-3 py-1 text-xs font-bold text-white">
-                    You{ownHandicap ? ` / HCP ${ownHandicap}` : ""}
+                    {ownerDisplayName}{ownHandicap ? ` / HCP ${ownHandicap}` : ""}
                   </span>
                   {livePlayers.map((player) => (
                     <button
@@ -918,7 +1039,7 @@ export default function RoundTracker() {
                       {hasMatchGame ? ` / Team ${player.team}` : ""} x
                     </button>
                   ))}
-                  {!livePlayers.length && <span className="text-sm text-muted">Add guests now. Friend search can plug into this later.</span>}
+                  {!livePlayers.length && <span className="text-sm text-muted">Add friends or guests before starting group games.</span>}
                 </div>
               </div>
 
@@ -1093,9 +1214,12 @@ export default function RoundTracker() {
                     <div className="space-y-2">
                       {liveLeaderboard.map((player, index) => (
                         <div key={player.id} className="flex items-center justify-between gap-3 rounded-xl bg-white px-3 py-3">
-                          <div className="min-w-0">
-                            <p className="truncate font-semibold text-dark">{index + 1}. {player.name}</p>
-                            <p className="text-xs text-muted">{player.holes}/{holesPlayed} holes</p>
+                          <div className="flex min-w-0 items-center gap-3">
+                            <PlayerAvatar src={player.avatarUrl} name={player.name} />
+                            <div className="min-w-0">
+                              <p className="truncate font-semibold text-dark">{index + 1}. {player.name}</p>
+                              <p className="text-xs text-muted">{player.holes}/{holesPlayed} holes</p>
+                            </div>
                           </div>
                           <div className="text-right">
                             <p className="text-lg font-semibold text-dark">{player.score ?? "-"}</p>
@@ -1565,6 +1689,15 @@ function buildLiveRoundSummary({
   return lines.join("\n");
 }
 
+function PlayerAvatar({ src, name }: { src?: string | null; name: string }) {
+  const initial = name.charAt(0).toUpperCase();
+  return (
+    <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-dark text-sm font-bold text-white">
+      {src ? <img src={src} alt={`${name} avatar`} className="h-full w-full object-cover" /> : initial}
+    </span>
+  );
+}
+
 function calculateMatchState(
   holes: Hole[],
   players: LiveParticipant[],
@@ -1665,15 +1798,108 @@ function formatMatchLabel(lead: number) {
   return `${lead > 0 ? "Team A" : "Team B"} ${Math.abs(lead)} Up`;
 }
 
-function calculateStablefordPoints(score: number | null, par: number) {
+function parseHandicapValue(value: string) {
+  const handicap = Number(value);
+  return Number.isFinite(handicap) ? Math.max(0, handicap) : 0;
+}
+
+function getStrokesReceived(handicap: string, holeHandicap: number | null, holesPlayed: 9 | 18) {
+  const handicapValue = parseHandicapValue(handicap);
+  if (!handicapValue) return 0;
+  const strokeIndex = holeHandicap || 18;
+  const baseStrokes = Math.floor(handicapValue / 18);
+  const remainder = Math.round(handicapValue % 18);
+  const frontNineAdjustment = holesPlayed === 9 ? 0.5 : 1;
+  return Math.floor(baseStrokes * frontNineAdjustment) + (strokeIndex <= remainder ? 1 : 0);
+}
+
+function calculateStablefordPoints(score: number | null, par: number, strokesReceived = 0) {
   if (score === null) return null;
-  const toPar = score - par;
+  const toPar = score - strokesReceived - par;
   if (toPar <= -3) return 5;
   if (toPar === -2) return 4;
   if (toPar === -1) return 3;
   if (toPar === 0) return 2;
   if (toPar === 1) return 1;
   return 0;
+}
+
+function getParticipantTotals(
+  player: LiveParticipant,
+  holes: Hole[],
+  playerScores: Record<string, string[]>,
+  holesPlayed: 9 | 18
+) {
+  let gross = 0;
+  let net = 0;
+  let points = 0;
+  let completed = 0;
+
+  holes.forEach((hole, index) => {
+    const score = getParticipantScore(player.id, index, holes, playerScores);
+    if (score === null) return;
+    const strokesReceived = getStrokesReceived(player.handicap, hole.handicap, holesPlayed);
+    gross += score;
+    net += score - strokesReceived;
+    points += calculateStablefordPoints(score, hole.par, strokesReceived) || 0;
+    completed += 1;
+  });
+
+  return { gross, net, points, completed };
+}
+
+function calculateSkinsState(
+  holes: Hole[],
+  players: LiveParticipant[],
+  playerScores: Record<string, string[]>,
+  holesPlayed: 9 | 18
+) {
+  let carryover = 0;
+  const playerSkins = new Map<string, number>();
+  const holeResults: Array<{
+    hole: number;
+    label: string;
+    winningPlayerId: string | null;
+    skinsAwarded: number;
+    carryover: number;
+  }> = [];
+
+  holes.slice(0, holesPlayed).forEach((hole, index) => {
+    const scoredPlayers = players
+      .map((player) => ({
+        player,
+        score: getParticipantScore(player.id, index, holes, playerScores),
+      }))
+      .filter((item): item is { player: LiveParticipant; score: number } => item.score !== null);
+    if (!scoredPlayers.length) return;
+
+    const bestScore = Math.min(...scoredPlayers.map((item) => item.score));
+    const winners = scoredPlayers.filter((item) => item.score === bestScore);
+    if (winners.length === 1) {
+      const skinsAwarded = carryover + 1;
+      const winner = winners[0].player;
+      playerSkins.set(winner.id, (playerSkins.get(winner.id) || 0) + skinsAwarded);
+      holeResults.push({
+        hole: index + 1,
+        label: `${winner.name} wins ${skinsAwarded} skin${skinsAwarded === 1 ? "" : "s"}`,
+        winningPlayerId: winner.id,
+        skinsAwarded,
+        carryover,
+      });
+      carryover = 0;
+    } else {
+      carryover += 1;
+      holeResults.push({
+        hole: index + 1,
+        label: `Carryover (${carryover})`,
+        winningPlayerId: null,
+        skinsAwarded: 0,
+        carryover,
+      });
+    }
+  });
+
+  return { playerSkins, holeResults, carryover };
 }
 
 async function saveLiveRoundData({
@@ -1736,10 +1962,12 @@ async function saveLiveRoundData({
   const playerRows = liveParticipants.map((player, index) => ({
     round_id: roundId,
     side_id: sideIdByParticipant.get(player.id) || null,
-    user_id: player.type === "owner" ? userId : null,
+    user_id: player.type === "owner" ? userId : player.userId || null,
     invited_by: player.type === "owner" ? null : userId,
     player_type: player.type,
     display_name: player.name,
+    username: player.username || null,
+    avatar_url: player.avatarUrl || null,
     handicap: parseOptionalNumber(player.handicap),
     course_handicap: parseOptionalNumber(player.handicap),
     playing_handicap: parseOptionalNumber(player.handicap),
@@ -1765,15 +1993,16 @@ async function saveLiveRoundData({
       const savedPlayerId = playerIdByLocalId.get(player.id);
       if (score === null) return null;
       if (!savedPlayerId) return null;
+      const strokesReceived = getStrokesReceived(player.handicap, hole.handicap, holesPlayed);
       return {
         round_id: roundId,
         round_player_id: savedPlayerId,
         side_id: sideIdByParticipant.get(player.id) || null,
         hole_number: index + 1,
         gross_score: score,
-        net_score: score,
-        stableford_points: calculateStablefordPoints(score, hole.par),
-        strokes_received: 0,
+        net_score: score - strokesReceived,
+        stableford_points: calculateStablefordPoints(score, hole.par, strokesReceived),
+        strokes_received: strokesReceived,
         picked_up: false,
         conceded: false,
         notes: null,
@@ -1806,10 +2035,24 @@ async function saveLiveRoundData({
 
   const sideAId = sides.find((row) => row.name === "Team A")?.id || null;
   const sideBId = sides.find((row) => row.name === "Team B")?.id || null;
+  const skinsState = calculateSkinsState(holes, liveParticipants, playerHoleScores, holesPlayed);
 
-  const gameHoleRows = savedGames.flatMap((game) => {
-    if (!["match_play", "four_ball_match", "foursomes", "skins"].includes(game.game_type)) return [];
-    return matchState.holeResults.map((result) => ({
+  const gameHoleRows: LiveGameHoleRow[] = savedGames.flatMap((game) => {
+    if (game.game_type === "skins") {
+      return skinsState.holeResults.map<LiveGameHoleRow>((result) => ({
+        round_game_id: game.id,
+        round_id: roundId,
+        hole_number: result.hole,
+        winning_player_id: result.winningPlayerId ? playerIdByLocalId.get(result.winningPlayerId) || null : null,
+        winning_side_id: null,
+        result_label: result.label,
+        carryover_count: result.carryover,
+        points: { skinsAwarded: result.skinsAwarded },
+        match_state: { carryover: result.carryover },
+      }));
+    }
+    if (!["match_play", "four_ball_match", "foursomes"].includes(game.game_type)) return [];
+    return matchState.holeResults.map<LiveGameHoleRow>((result) => ({
       round_game_id: game.id,
       round_id: roundId,
       hole_number: result.hole,
@@ -1829,7 +2072,6 @@ async function saveLiveRoundData({
 
   const resultRows: LiveGameResultRow[] = [];
   savedGames.forEach((game) => {
-    const ownerTotal = holes.reduce((sum, hole) => sum + (hole.score === "" ? 0 : Number(hole.score)), 0);
     if (["match_play", "four_ball_match", "foursomes"].includes(game.game_type)) {
       resultRows.push(
         {
@@ -1864,19 +2106,42 @@ async function saveLiveRoundData({
       return;
     }
 
-    resultRows.push({
-      round_game_id: game.id,
-      round_id: roundId,
-      round_player_id: playerIdByLocalId.get("owner") || null,
-      side_id: sideIdByParticipant.get("owner") || null,
-      position: 1,
-      total_gross: ownerTotal || null,
-      total_net: ownerTotal || null,
-      total_points: game.game_type === "stableford" ? holes.reduce((sum, hole) => sum + (calculateStablefordPoints(hole.score === "" ? null : Number(hole.score), hole.par) || 0), 0) : null,
-      holes_won: null,
-      skins_won: game.game_type === "skins" ? matchState.teamAWins : null,
-      result_label: game.game_type === "stableford" ? "Stableford summary" : "Stroke summary",
-      result_payload: { roundIntent },
+    const totals = liveParticipants
+      .map((player) => ({
+        player,
+        totals: getParticipantTotals(player, holes, playerHoleScores, holesPlayed),
+      }))
+      .filter((row) => row.totals.completed > 0)
+      .sort((a, b) => {
+        if (game.game_type === "stableford") return b.totals.points - a.totals.points;
+        if (game.game_type === "medal") return a.totals.net - b.totals.net;
+        if (game.game_type === "skins") return (skinsState.playerSkins.get(b.player.id) || 0) - (skinsState.playerSkins.get(a.player.id) || 0);
+        return a.totals.gross - b.totals.gross;
+      });
+
+    totals.forEach((row, index) => {
+      const skinsWon = game.game_type === "skins" ? skinsState.playerSkins.get(row.player.id) || 0 : null;
+      resultRows.push({
+        round_game_id: game.id,
+        round_id: roundId,
+        round_player_id: playerIdByLocalId.get(row.player.id) || null,
+        side_id: sideIdByParticipant.get(row.player.id) || null,
+        position: index + 1,
+        total_gross: row.totals.gross || null,
+        total_net: row.totals.net || null,
+        total_points: game.game_type === "stableford" ? row.totals.points : null,
+        holes_won: null,
+        skins_won: skinsWon,
+        result_label:
+          game.game_type === "stableford"
+            ? `${row.totals.points} Stableford pts`
+            : game.game_type === "skins"
+              ? `${skinsWon || 0} skin${skinsWon === 1 ? "" : "s"}`
+              : game.game_type === "medal"
+                ? `Net ${row.totals.net}`
+                : `Gross ${row.totals.gross}`,
+        result_payload: { roundIntent, playerName: row.player.name, holesCompleted: row.totals.completed },
+      });
     });
   });
 

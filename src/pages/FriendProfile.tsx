@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useRoute } from "wouter";
-import { Activity, ArrowLeft, ShieldCheck, UserRound } from "lucide-react";
+import { Activity, ArrowLeft, ShieldCheck } from "lucide-react";
 import { Button, EmptyState, PageHeader, Surface } from "@/components/ui";
 import { supabase } from "@/lib/supabase";
 import type { FriendProfileSummary, LiveActivity } from "@/lib/types";
@@ -80,18 +80,19 @@ export default function FriendProfile() {
       <section className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr]">
         <Surface>
           <div className="flex items-start gap-4">
-            <span className="inline-flex h-14 w-14 items-center justify-center rounded-xl bg-pulse/12 text-pulse">
-              <UserRound className="h-7 w-7" />
-            </span>
+            <FriendAvatar src={profile.avatar_url} name={displayName} />
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.18em] text-muted">Accepted friend</p>
               <h2 className="mt-2 text-3xl font-semibold text-dark">{displayName}</h2>
               {profile.username && <p className="mt-1 text-sm font-semibold text-pulse">@{profile.username}</p>}
+              {profile.bio && <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted">{profile.bio}</p>}
             </div>
           </div>
-          <div className="mt-6 grid gap-3 sm:grid-cols-2">
+          <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <InfoTile label="Mode" value={formatMode(profile.main_sport)} />
             <InfoTile label="Goal" value={profile.main_goal || "Not shared"} />
+            <InfoTile label="Handicap" value={profile.golf_handicap !== null && profile.golf_handicap !== undefined ? Number(profile.golf_handicap).toFixed(1) : "Not shared"} />
+            <InfoTile label="Home Course" value={profile.home_course || "Not shared"} />
           </div>
         </Surface>
 
@@ -122,6 +123,15 @@ export default function FriendProfile() {
         </div>
       </Surface>
     </main>
+  );
+}
+
+function FriendAvatar({ src, name }: { src?: string | null; name: string }) {
+  const initial = name.trim().charAt(0).toUpperCase() || "A";
+  return (
+    <span className="inline-flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-pulse/15 bg-pulse/10 text-xl font-bold text-pulse">
+      {src ? <img src={src} alt="" className="h-full w-full object-cover" /> : initial}
+    </span>
   );
 }
 

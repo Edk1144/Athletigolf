@@ -8,6 +8,9 @@ export type Profile = {
   height: string | null;
   weight: string | null;
   golf_handicap: number | null;
+  avatar_url?: string | null;
+  bio?: string | null;
+  home_course?: string | null;
   main_goal?: string | null;
   onboarding_completed?: boolean | null;
   onboarding_completed_at?: string | null;
@@ -121,6 +124,8 @@ export type RoundPlayer = {
   invited_by: string | null;
   player_type: "owner" | "friend" | "guest";
   display_name: string;
+  username?: string | null;
+  avatar_url?: string | null;
   handicap: number | null;
   course_handicap: number | null;
   playing_handicap: number | null;
@@ -494,6 +499,8 @@ export type FriendSearchResult = {
   user_id: string;
   username: string | null;
   display_name: string | null;
+  avatar_url?: string | null;
+  golf_handicap?: number | null;
   relationship_status: FriendConnection["status"] | null;
   relationship_direction: "none" | "incoming" | "outgoing" | "accepted";
 };
@@ -502,6 +509,8 @@ export type FriendConnectionProfile = FriendConnection & {
   other_user_id: string;
   other_username: string | null;
   other_display_name: string | null;
+  other_avatar_url?: string | null;
+  other_golf_handicap?: number | null;
 };
 
 export type GolfCourseSearchResult = {
@@ -545,6 +554,10 @@ export type FriendProfileSummary = {
   user_id: string;
   username: string | null;
   display_name: string | null;
+  avatar_url?: string | null;
+  bio?: string | null;
+  home_course?: string | null;
+  golf_handicap?: number | null;
   main_sport: string | null;
   main_goal: string | null;
   created_at: string;

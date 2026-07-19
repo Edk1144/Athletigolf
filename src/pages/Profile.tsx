@@ -25,6 +25,9 @@ export default function Profile() {
   const [editHeight, setEditHeight] = useState("");
   const [editWeight, setEditWeight] = useState("");
   const [editHandicap, setEditHandicap] = useState("");
+  const [editAvatarUrl, setEditAvatarUrl] = useState("");
+  const [editBio, setEditBio] = useState("");
+  const [editHomeCourse, setEditHomeCourse] = useState("");
 
   useEffect(() => {
     loadData();
@@ -52,6 +55,9 @@ export default function Profile() {
     setEditHeight(profile?.height || "");
     setEditWeight(profile?.weight || "");
     setEditHandicap(profile?.golf_handicap?.toString() || "");
+    setEditAvatarUrl(profile?.avatar_url || "");
+    setEditBio(profile?.bio || "");
+    setEditHomeCourse(profile?.home_course || "");
     setEditing(true);
   };
 
@@ -73,6 +79,9 @@ export default function Profile() {
       height: editHeight || null,
       weight: editWeight || null,
       golf_handicap: editHandicap ? Number(editHandicap) : null,
+      avatar_url: editAvatarUrl || null,
+      bio: editBio || null,
+      home_course: editHomeCourse || null,
     });
     setSaving(false);
 
@@ -108,9 +117,7 @@ export default function Profile() {
       <div className="mx-auto max-w-7xl">
         <section className="mb-5 overflow-hidden rounded-2xl border border-white/10 bg-dark text-white shadow-sm">
           <div className="grid gap-6 p-6 lg:grid-cols-[auto_1fr_auto] lg:items-center">
-            <div className="flex h-24 w-24 items-center justify-center rounded-xl border border-white/10 bg-white/8 text-4xl font-semibold">
-              {initial}
-            </div>
+            <ProfileAvatar src={profile?.avatar_url} name={name} size="large" />
 
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.22em] text-pulse">Athlete Profile</p>
@@ -121,7 +128,9 @@ export default function Profile() {
                 {username && <ProfilePill>@{username}</ProfilePill>}
                 <ProfilePill>Member since {memberSince}</ProfilePill>
                 <ProfilePill>Handicap {profile?.golf_handicap ?? "-"}</ProfilePill>
+                {profile?.home_course && <ProfilePill>{profile.home_course}</ProfilePill>}
               </div>
+              {profile?.bio && <p className="mt-4 max-w-2xl text-sm leading-relaxed text-white/68">{profile.bio}</p>}
             </div>
 
             <div className="flex flex-col gap-2 sm:flex-row lg:flex-col">
@@ -160,6 +169,7 @@ export default function Profile() {
                 <DetailRow label="Height" value={profile?.height || "-"} />
                 <DetailRow label="Weight" value={profile?.weight || "-"} />
                 <DetailRow label="Golf Handicap" value={profile?.golf_handicap?.toString() || "-"} />
+                <DetailRow label="Home Course" value={profile?.home_course || "-"} />
               </div>
             </Surface>
 
@@ -251,6 +261,9 @@ export default function Profile() {
                 <Field label="Username" value={editUsername} onChange={(value) => setEditUsername(normalizeUsername(value))} placeholder="your_username" />
                 <p className="mt-2 text-xs text-muted">{usernameRules}</p>
               </div>
+              <Field label="Profile Picture URL" value={editAvatarUrl} onChange={setEditAvatarUrl} placeholder="https://..." />
+              <Field label="Home Course" value={editHomeCourse} onChange={setEditHomeCourse} placeholder="Your home club or course" />
+              <TextAreaField label="Bio" value={editBio} onChange={setEditBio} placeholder="Tell friends what you are working on..." />
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="Age" type="number" value={editAge} onChange={setEditAge} placeholder="25" />
                 <Field label="Golf Handicap" type="number" value={editHandicap} onChange={setEditHandicap} placeholder="12.4" />
@@ -283,6 +296,20 @@ function ProfilePill({ children }: { children: ReactNode }) {
     <span className="rounded-full border border-white/10 bg-white/8 px-3 py-1.5 text-sm font-semibold text-white/78">
       {children}
     </span>
+  );
+}
+
+function ProfileAvatar({ src, name, size = "medium" }: { src?: string | null; name: string; size?: "medium" | "large" }) {
+  const sizeClass = size === "large" ? "h-24 w-24 text-4xl rounded-xl" : "h-12 w-12 text-lg rounded-lg";
+  const initial = name.charAt(0).toUpperCase();
+  return (
+    <div className={`${sizeClass} flex shrink-0 items-center justify-center overflow-hidden border border-white/10 bg-white/8 font-semibold text-white`}>
+      {src ? (
+        <img src={src} alt={`${name} profile`} className="h-full w-full object-cover" />
+      ) : (
+        initial
+      )}
+    </div>
   );
 }
 
@@ -324,6 +351,23 @@ function Field({ label, value, onChange, type = "text", placeholder }: { label: 
     <div>
       <FieldLabel>{label}</FieldLabel>
       <TextInput type={type} value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} />
+    </div>
+  );
+}
+
+function TextAreaField({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (value: string) => void; placeholder?: string }) {
+  return (
+    <div>
+      <FieldLabel>{label}</FieldLabel>
+      <textarea
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        rows={4}
+        maxLength={240}
+        className="w-full rounded-lg border border-line bg-white px-4 py-3 text-dark outline-none transition focus:border-pulse"
+      />
+      <p className="mt-1 text-xs text-muted">{value.length}/240</p>
     </div>
   );
 }
