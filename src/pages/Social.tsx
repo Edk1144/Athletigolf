@@ -1,74 +1,131 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ComponentType, type FormEvent, type ReactNode } from "react";
 import { Link } from "wouter";
-import { Activity, Check, Copy, Dumbbell, Flag, MapPin, MessageCircle, Pencil, ShieldCheck, Sparkles, UserPlus, Users, X } from "lucide-react";
+import {
+  Activity,
+  Check,
+  Clock,
+  Copy,
+  Dumbbell,
+  Flag,
+  MessageCircle,
+  Pencil,
+  Search,
+  Trophy,
+  UserPlus,
+  Users,
+  X,
+} from "lucide-react";
 import { Button, EmptyState, FieldLabel, SelectInput, Surface, TextArea, TextInput } from "@/components/ui";
 import { supabase } from "@/lib/supabase";
-import type { FriendConnection, FriendConnectionProfile, FriendSearchResult, LiveActivity, OnboardingData } from "@/lib/types";
+import type {
+  FriendConnection,
+  FriendConnectionProfile,
+  FriendSearchResult,
+  LiveActivity,
+  OnboardingData,
+} from "@/lib/types";
 import { normalizeUsername } from "@/lib/usernames";
 
 type ActivityType = LiveActivity["activity_type"];
 
 const activityOptions: Array<{ value: ActivityType; label: string }> = [
-  { value: "gym", label: "At the gym" },
+  { value: "available", label: "Free to play/train" },
   { value: "course", label: "On the course" },
+  { value: "gym", label: "At the gym" },
   { value: "practice", label: "Practicing" },
-  { value: "available", label: "Available" },
 ];
+
+const activityMeta: Record<ActivityType, { label: string; icon: ComponentType<{ className?: string }>; tone: string }> = {
+  available: { label: "Available", icon: Users, tone: "bg-sky-500/15 text-sky-700 dark:text-sky-200" },
+  course: { label: "On course", icon: Flag, tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200" },
+  gym: { label: "Gym", icon: Dumbbell, tone: "bg-cyan-500/15 text-cyan-700 dark:text-cyan-200" },
+  practice: { label: "Practice", icon: Trophy, tone: "bg-amber-500/15 text-amber-700 dark:text-amber-200" },
+};
 
 export default function Social() {
   const [activities, setActivities] = useState<LiveActivity[]>([]);
   const [connections, setConnections] = useState<FriendConnectionProfile[]>([]);
-  const [userId, setUserId] = useState("");
-  const [profileUsername, setProfileUsername] = useState("");
-  const [activityType, setActivityType] = useState<ActivityType>("gym");
+  const [userId, setUserId] = useState<string | null>(null);
+  const [profileUsername, setProfileUsername] = useState<string | null>(null);
+  const [activityType, setActivityType] = useState<ActivityType>("available");
   const [locationName, setLocationName] = useState("");
   const [detail, setDetail] = useState("");
   const [visibility, setVisibility] = useState<LiveActivity["visibility"]>("friends");
-  const [friendId, setFriendId] = useState("");
   const [friendSearch, setFriendSearch] = useState("");
-  const [searchResults, setSearchResults] = useState<FriendSearchResult[]>([]);
-  const [searching, setSearching] = useState(false);
-  const [editingFriendId, setEditingFriendId] = useState("");
-  const [friendLabel, setFriendLabel] = useState("");
+  const [friendResults, setFriendResults] = useState<FriendSearchResult[]>([]);
+  const [requestUsername, setRequestUsername] = useState("");
+  const [editingConnectionId, setEditingConnectionId] = useState<string | null>(null);
+  const [editingLabel, setEditingLabel] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    loadSocial();
+    void loadSocial();
   }, []);
 
   async function loadSocial() {
     setLoading(true);
-    const [{ data: authData }, { data: active }, { data: friends }, { data: profile }] = await Promise.all([
-      supabase.auth.getUser(),
+    setError(null);
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      setUserId(null);
+      setActivities([]);
+      setConnections([]);
+      setLoading(false);
+      return;
+    }
+
+    setUserId(user.id);
+
+    const [activityResponse, connectionResponse, profileResponse] = await Promise.all([
       supabase
         .from("live_activities")
         .select("*")
         .is("ended_at", null)
-        .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
-        .order("started_at", { ascending: false }),
+        .order("started_at", { ascending: false })
+        .limit(50),
       supabase.rpc("get_friend_connections_with_profiles"),
-      supabase.from("profiles").select("onboarding_data, username").maybeSingle(),
+      supabase.from("profiles").select("username, onboarding").eq("id", user.id).maybeSingle(),
     ]);
 
-    setUserId(authData.user?.id || "");
-    setActivities((active as LiveActivity[]) || []);
-    setConnections((friends as FriendConnectionProfile[]) || []);
-    setProfileUsername(profile?.username || authData.user?.user_metadata?.username || "");
-    const onboarding = (profile?.onboarding_data as OnboardingData | null) || null;
-    setVisibility(onboarding?.privacy?.defaultLiveVisibility || "friends");
+    if (activityResponse.error) {
+      setError(activityResponse.error.message);
+    } else {
+      setActivities((activityResponse.data || []) as LiveActivity[]);
+    }
+
+    if (connectionResponse.error) {
+      setError(connectionResponse.error.message);
+    } else {
+      setConnections((connectionResponse.data || []) as FriendConnectionProfile[]);
+    }
+
+    if (profileResponse.error) {
+      setError(profileResponse.error.message);
+    } else {
+      const onboarding = profileResponse.data?.onboarding as OnboardingData | null;
+      setProfileUsername(profileResponse.data?.username || onboarding?.social?.username || null);
+    }
+
     setLoading(false);
   }
 
-  async function startActivity(event: React.FormEvent) {
+  async function startActivity(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!userId) return;
+
     setSaving(true);
-    setError("");
+    setError(null);
 
     const { error: endError } = await supabase
       .from("live_activities")
-      .update({ ended_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+      .update({ ended_at: new Date().toISOString() })
+      .eq("user_id", userId)
       .is("ended_at", null);
 
     if (endError) {
@@ -77,626 +134,729 @@ export default function Social() {
       return;
     }
 
+    const expiresAt = new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString();
     const { error: insertError } = await supabase.from("live_activities").insert({
+      user_id: userId,
       activity_type: activityType,
       location_name: locationName.trim() || null,
       detail: detail.trim() || null,
       visibility,
       started_at: new Date().toISOString(),
-      expires_at: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(),
+      expires_at: expiresAt,
     });
-
-    setSaving(false);
 
     if (insertError) {
       setError(insertError.message);
-      return;
+    } else {
+      setLocationName("");
+      setDetail("");
+      await loadSocial();
     }
 
-    setLocationName("");
-    setDetail("");
-    await loadSocial();
+    setSaving(false);
   }
 
-  async function endActivity(id: string) {
+  async function endActivity() {
+    if (!userId) return;
     setSaving(true);
-    setError("");
-    const { error: endError } = await supabase
+    setError(null);
+
+    const { error: updateError } = await supabase
       .from("live_activities")
-      .update({ ended_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-      .eq("id", id);
-    setSaving(false);
+      .update({ ended_at: new Date().toISOString() })
+      .eq("user_id", userId)
+      .is("ended_at", null);
 
-    if (endError) {
-      setError(endError.message);
-      return;
+    if (updateError) {
+      setError(updateError.message);
+    } else {
+      await loadSocial();
     }
-
-    await loadSocial();
-  }
-
-  async function searchFriends(event: React.FormEvent) {
-    event.preventDefault();
-    const query = normalizeUsername(friendSearch);
-    if (query.length < 2) {
-      setError("Type at least two username characters.");
-      return;
-    }
-
-    setSearching(true);
-    setError("");
-    const { data, error: searchError } = await supabase.rpc("search_profiles_for_friend", {
-      search_query: query,
-    });
-    setSearching(false);
-
-    if (searchError) {
-      setError(searchError.message);
-      return;
-    }
-
-    setSearchResults((data as FriendSearchResult[]) || []);
-  }
-
-  async function sendFriendRequestTo(receiverId: string) {
-    if (!receiverId) return;
-    if (receiverId === userId) {
-      setError("You cannot add yourself as a friend.");
-      return;
-    }
-
-    setSaving(true);
-    setError("");
-
-    const { error: insertError } = await supabase.from("friend_connections").insert({
-      receiver_id: receiverId,
-      status: "pending",
-    });
 
     setSaving(false);
+  }
 
-    if (insertError) {
-      setError(insertError.message);
-      return;
-    }
-
+  async function searchFriends(event?: FormEvent<HTMLFormElement>) {
+    event?.preventDefault();
     await searchFriendsFromValue(friendSearch);
-    await loadSocial();
-  }
-
-  async function sendFriendRequest(event: React.FormEvent) {
-    event.preventDefault();
-    const receiverId = friendId.trim();
-    await sendFriendRequestTo(receiverId);
-    setFriendId("");
   }
 
   async function searchFriendsFromValue(value: string) {
     const query = normalizeUsername(value);
-    if (query.length < 2) return;
-    const { data } = await supabase.rpc("search_profiles_for_friend", {
+    if (!query || query.length < 2) {
+      setFriendResults([]);
+      return;
+    }
+
+    const { data, error: searchError } = await supabase.rpc("search_profiles_for_friend", {
       search_query: query,
     });
-    setSearchResults((data as FriendSearchResult[]) || []);
+
+    if (searchError) {
+      setError(searchError.message);
+    } else {
+      setFriendResults((data || []) as FriendSearchResult[]);
+    }
   }
 
-  async function updateConnection(id: string, status: FriendConnection["status"]) {
+  async function sendFriendRequestTo(targetUserId: string) {
+    if (!userId || targetUserId === userId) return;
     setSaving(true);
-    setError("");
+    setError(null);
+
+    const { error: requestError } = await supabase.from("friend_connections").insert({
+      requester_id: userId,
+      receiver_id: targetUserId,
+      status: "pending",
+    });
+
+    if (requestError) {
+      setError(requestError.message);
+    } else {
+      await loadSocial();
+      await searchFriendsFromValue(friendSearch);
+    }
+
+    setSaving(false);
+  }
+
+  async function sendFriendRequest(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const username = normalizeUsername(requestUsername);
+
+    if (!username) return;
+    setSaving(true);
+    setError(null);
+
+    const { data, error: searchError } = await supabase.rpc("search_profiles_for_friend", {
+      search_query: username,
+    });
+
+    if (searchError) {
+      setError(searchError.message);
+      setSaving(false);
+      return;
+    }
+
+    const match = ((data || []) as FriendSearchResult[]).find((result) => result.username === username);
+    if (!match) {
+      setError("No profile found with that username.");
+      setSaving(false);
+      return;
+    }
+
+    await sendFriendRequestTo(match.user_id);
+    setRequestUsername("");
+    setSaving(false);
+  }
+
+  async function updateConnection(connectionId: string, status: FriendConnection["status"]) {
+    setSaving(true);
+    setError(null);
+
     const { error: updateError } = await supabase
       .from("friend_connections")
-      .update({ status, updated_at: new Date().toISOString() })
-      .eq("id", id);
-    setSaving(false);
+      .update({ status })
+      .eq("id", connectionId);
 
     if (updateError) {
       setError(updateError.message);
-      return;
+    } else {
+      await loadSocial();
     }
 
-    await loadSocial();
+    setSaving(false);
   }
 
-  async function acceptIncomingFromSearch(friendUserId: string) {
-    const connection = connections.find(
-      (item) => item.requester_id === friendUserId && item.receiver_id === userId && item.status === "pending"
-    );
-    if (!connection) {
-      setError("That request is not available anymore.");
-      return;
-    }
+  function findConnectionForSearchResult(result: FriendSearchResult) {
+    return connections.find((connection) => connection.other_user_id === result.user_id) || null;
+  }
+
+  async function acceptIncomingFromSearch(result: FriendSearchResult) {
+    const connection = findConnectionForSearchResult(result);
+    if (!connection) return;
+
     await updateConnection(connection.id, "accepted");
     await searchFriendsFromValue(friendSearch);
   }
 
-  async function removeConnection(id: string) {
+  async function removeConnection(connectionId: string) {
     setSaving(true);
-    setError("");
-    const { error: deleteError } = await supabase
-      .from("friend_connections")
-      .delete()
-      .eq("id", id);
-    setSaving(false);
+    setError(null);
+
+    const { error: deleteError } = await supabase.from("friend_connections").delete().eq("id", connectionId);
 
     if (deleteError) {
       setError(deleteError.message);
-      return;
+    } else {
+      await loadSocial();
+      if (friendSearch.trim()) {
+        await searchFriendsFromValue(friendSearch);
+      }
     }
 
-    await loadSocial();
+    setSaving(false);
   }
 
-  async function saveFriendLabel(connection: FriendConnection) {
-    const labelColumn = connection.requester_id === userId ? "requester_label" : "receiver_label";
+  async function saveFriendLabel(connection: FriendConnectionProfile) {
+    if (!userId) return;
+
+    const otherUserId = getOtherUserId(connection, userId);
+    const patch =
+      connection.requester_id === userId
+        ? { requester_label: editingLabel.trim() || null }
+        : { receiver_label: editingLabel.trim() || null };
+
     setSaving(true);
-    setError("");
+    setError(null);
+
     const { error: updateError } = await supabase
       .from("friend_connections")
-      .update({ [labelColumn]: friendLabel.trim() || null, updated_at: new Date().toISOString() })
-      .eq("id", connection.id);
-    setSaving(false);
+      .update(patch)
+      .eq("id", connection.id)
+      .or(`requester_id.eq.${userId},receiver_id.eq.${userId}`)
+      .or(`requester_id.eq.${otherUserId},receiver_id.eq.${otherUserId}`);
 
     if (updateError) {
       setError(updateError.message);
-      return;
+    } else {
+      setEditingConnectionId(null);
+      setEditingLabel("");
+      await loadSocial();
     }
 
-    setEditingFriendId("");
-    setFriendLabel("");
-    await loadSocial();
+    setSaving(false);
   }
 
-  function startRename(connection: FriendConnection) {
-    setEditingFriendId(connection.id);
-    setFriendLabel(getConnectionLabel(connection, userId));
+  function startRename(connection: FriendConnectionProfile) {
+    if (!userId) return;
+    setEditingConnectionId(connection.id);
+    setEditingLabel(getConnectionLabel(connection, userId));
   }
 
   const activeActivity = activities.find((activity) => activity.user_id === userId) || null;
   const friendActivities = activities.filter((activity) => activity.user_id !== userId);
+
   const friendNameById = useMemo(() => {
     const names = new Map<string, string>();
     connections.forEach((connection) => {
-      if (connection.status !== "accepted") return;
-      const otherId = getOtherUserId(connection, userId);
-      names.set(otherId, getConnectionLabel(connection, userId));
+      if (connection.other_user_id) {
+        names.set(connection.other_user_id, getConnectionLabel(connection, userId));
+      }
     });
     return names;
   }, [connections, userId]);
-  const incomingRequests = connections.filter(
-    (connection) => connection.receiver_id === userId && connection.status === "pending"
-  );
-  const outgoingRequests = connections.filter(
-    (connection) => connection.requester_id === userId && connection.status === "pending"
-  );
+
+  const incomingRequests = connections.filter((connection) => {
+    const isIncoming = userId ? connection.receiver_id === userId : false;
+    return connection.status === "pending" && isIncoming;
+  });
+
+  const outgoingRequests = connections.filter((connection) => {
+    const isOutgoing = userId ? connection.requester_id === userId : false;
+    return connection.status === "pending" && isOutgoing;
+  });
+
   const acceptedConnections = connections.filter((connection) => connection.status === "accepted");
-  const acceptedCount = useMemo(
-    () => connections.filter((connection) => connection.status === "accepted").length,
-    [connections]
-  );
-  const pendingCount = useMemo(
-    () => connections.filter((connection) => connection.status === "pending").length,
-    [connections]
-  );
-  const friendFeedCount = friendActivities.length;
-  const hasRequests = incomingRequests.length > 0 || outgoingRequests.length > 0;
+  const acceptedCount = acceptedConnections.length;
+  const pendingCount = incomingRequests.length + outgoingRequests.length;
+  const liveNow = friendActivities.slice(0, 5);
+  const friendsOnCourse = friendActivities
+    .filter((activity) => activity.activity_type === "course" || activity.activity_type === "practice")
+    .slice(0, 8);
+  const fourballInvites = friendActivities.filter((activity) => activity.activity_type === "available").slice(0, 3);
+  const gymInvites = friendActivities.filter((activity) => activity.activity_type === "gym").slice(0, 3);
+  const feedItems = friendActivities.slice(0, 6);
 
   function jumpToSocialSection(sectionId: string) {
+    if (typeof document === "undefined") return;
     document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-cream text-muted">
-        Loading social hub...
-      </div>
+      <main className="mx-auto max-w-6xl space-y-6 px-4 py-6 sm:px-6">
+        <Surface className="p-8 text-center text-sm text-muted">Loading your social hub...</Surface>
+      </main>
     );
   }
 
   return (
-    <main className="min-h-screen bg-[#eef4f8] px-4 pb-28 pt-5 text-ink md:px-8 md:py-7">
-      <section className="mb-5 overflow-hidden rounded-[1.65rem] border border-[#d8e4ec] bg-white p-4 shadow-sm md:p-6">
-        <div className="grid gap-4 lg:grid-cols-[1fr_0.88fr] lg:items-stretch">
-          <div className="rounded-[1.35rem] bg-[radial-gradient(circle_at_top_left,rgba(18,184,214,0.22),transparent_36%),linear-gradient(135deg,#12334a,#07131d)] p-5 text-white md:p-6">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1.5 text-xs font-bold uppercase tracking-[0.16em] text-cyan-200">
-                <Sparkles className="h-3.5 w-3.5" />
-                AthletiClub
-              </span>
-              {profileUsername && (
-                <span className="rounded-full border border-white/10 bg-white/8 px-3 py-1.5 text-sm font-semibold text-white/72">
-                  @{profileUsername}
-                </span>
-              )}
-            </div>
-            <h1 className="mt-4 text-3xl font-semibold tracking-tight md:text-5xl">
-              Your training circle, live.
-            </h1>
-            <p className="mt-3 max-w-2xl text-sm leading-relaxed text-white/66 md:text-base">
-              Check in, find players, follow rounds and sessions, and keep your private training data locked to the people you choose.
-            </p>
-            <div className="mt-5 flex flex-wrap gap-2">
-              <button type="button" onClick={() => jumpToSocialSection("social-checkin")} className="rounded-full bg-cyan-300 px-4 py-2 text-sm font-bold text-slate-950 shadow-sm transition hover:bg-cyan-200">
-                Check in
-              </button>
-              <button type="button" onClick={() => jumpToSocialSection("social-add-friend")} className="rounded-full border border-white/12 bg-white/10 px-4 py-2 text-sm font-bold text-white transition hover:bg-white/15">
-                Find players
-              </button>
-              <button type="button" onClick={() => jumpToSocialSection("social-feed")} className="rounded-full border border-white/12 bg-white/10 px-4 py-2 text-sm font-bold text-white transition hover:bg-white/15">
-                Live feed
-              </button>
-            </div>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
-            <SocialHeroStat icon={Activity} label="You" value={activeActivity ? getActivityLabel(activeActivity.activity_type) : "Offline"} />
-            <SocialHeroStat icon={Users} label="Squad" value={`${acceptedCount} friends`} />
-            <SocialHeroStat icon={MessageCircle} label="Live" value={`${friendFeedCount} updates`} />
-          </div>
+    <main className="mx-auto max-w-6xl space-y-6 px-4 py-6 pb-28 sm:px-6">
+      {error ? (
+        <div className="rounded-[28px] border border-red-500/25 bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-200">
+          {error}
         </div>
-      </section>
+      ) : null}
 
-      <section className="mb-5 grid gap-3 sm:grid-cols-3">
-        <SocialMetric icon={Activity} label="Current status" value={activeActivity ? getActivityLabel(activeActivity.activity_type) : "Offline"} />
-        <SocialMetric icon={Users} label="Friends" value={acceptedCount} />
-        <SocialMetric icon={UserPlus} label={hasRequests ? "Requests waiting" : "Pending"} value={pendingCount} />
-      </section>
-
-      <section className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr]">
-        <Surface id="social-checkin" className="scroll-mt-6">
-          <div className="mb-5 flex items-center gap-3">
-            <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-pulse/10 text-pulse">
-              <MapPin className="h-5 w-5" />
-            </span>
+      <section className="overflow-hidden rounded-[32px] border border-white/70 bg-gradient-to-br from-sky-950 via-cyan-950 to-emerald-950 text-white shadow-xl dark:border-white/10">
+        <div className="space-y-6 p-5 sm:p-7">
+          <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <p className="text-xs font-bold uppercase tracking-[0.18em] text-muted">Status composer</p>
-              <h2 className="text-xl font-semibold text-dark">Tell friends what you are doing</h2>
+              <p className="text-xs font-black uppercase tracking-[0.35em] text-cyan-200">Friends</p>
+              <h1 className="mt-2 text-3xl font-black sm:text-4xl">Social hub</h1>
+              <p className="mt-2 max-w-2xl text-sm text-cyan-50/75">
+                Follow friends mid-round, see training wins, and find people to play or train with.
+              </p>
             </div>
-          </div>
-
-          <form onSubmit={startActivity} className="grid gap-4">
-            <div className="grid gap-2 sm:grid-cols-4">
-              {activityOptions.map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() => setActivityType(option.value)}
-                  className={`rounded-lg border px-3 py-2 text-sm font-semibold transition ${
-                    activityType === option.value
-                      ? "border-pulse bg-pulse text-white"
-                      : "border-line bg-panel text-muted hover:border-pulse/30 hover:text-pulse"
-                  }`}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-            <div>
-              <FieldLabel>Activity</FieldLabel>
-              <SelectInput value={activityType} onChange={(event) => setActivityType(event.target.value as ActivityType)}>
-                {activityOptions.map((option) => (
-                  <option key={option.value} value={option.value}>{option.label}</option>
-                ))}
-              </SelectInput>
-            </div>
-            <Field label="Location" value={locationName} onChange={setLocationName} placeholder="Gym, course, range..." />
-            <div>
-              <FieldLabel>Detail</FieldLabel>
-              <TextArea rows={3} value={detail} onChange={(event) => setDetail(event.target.value)} placeholder="Push day, back nine, wedge practice..." />
-            </div>
-            <div>
-              <FieldLabel>Visibility</FieldLabel>
-              <SelectInput value={visibility} onChange={(event) => setVisibility(event.target.value as LiveActivity["visibility"])}>
-                <option value="friends">Friends only</option>
-                <option value="private">Private log</option>
-              </SelectInput>
-            </div>
-            {error && <p className="rounded-lg border border-danger/25 bg-danger/10 p-3 text-sm font-semibold text-danger">{error}</p>}
-            <Button type="submit" variant="pulse" disabled={saving}>
-              {saving ? "Saving..." : activeActivity ? "Replace Current Check-In" : "Start Check-In"}
-            </Button>
-          </form>
-        </Surface>
-
-        <div className="space-y-5">
-          <Surface className="bg-[#0b1f2d] text-white">
-            <div className="flex items-start gap-3">
-              <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-cyan-300/15 text-cyan-200">
-                {activeActivity?.activity_type === "course" ? <Flag className="h-5 w-5" /> : <Dumbbell className="h-5 w-5" />}
-              </span>
-              <div>
-                <p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-200">Now board</p>
-                <h2 className="mt-2 text-3xl font-semibold">{activeActivity ? getActivityLabel(activeActivity.activity_type) : "You are offline"}</h2>
-                <p className="mt-3 text-sm leading-relaxed text-white/64">
-                  {activeActivity
-                    ? `${activeActivity.location_name || "Location not set"} - ${activeActivity.detail || "No extra detail"}`
-                    : "When you check in, the live status will appear here first. Friend visibility can expand once the social graph is tested."}
-                </p>
-              </div>
-            </div>
-          {activeActivity && (
-              <div className="mt-6 grid gap-3 sm:grid-cols-[1fr_auto] sm:items-center">
-                <p className="text-sm text-white/50">
-                  Started {formatRelativeTime(activeActivity.started_at)}
-                  {activeActivity.expires_at ? `, expires ${formatRelativeTime(activeActivity.expires_at)}` : ""}
-                </p>
-                <Button type="button" variant="secondary" onClick={() => endActivity(activeActivity.id)} disabled={saving} className="border-white/15 bg-white/10 text-white hover:bg-white/15">
-                  End Check-In
-                </Button>
-              </div>
-            )}
-          </Surface>
-
-          <Surface id="social-feed" className="scroll-mt-6">
-            <div className="mb-5 flex items-center gap-3">
-              <Users className="h-5 w-5 text-pulse" />
-              <h2 className="text-xl font-semibold text-dark">Live board</h2>
-            </div>
-            {friendActivities.length ? (
-              <div className="space-y-3">
-                {friendActivities.map((activity) => (
-                  <ActivityRow key={activity.id} activity={activity} name={friendNameById.get(activity.user_id)} />
-                ))}
-              </div>
-            ) : (
-              <EmptyState title="No friends live right now" description="Accepted friends with friends-visible check-ins will appear here." />
-            )}
-          </Surface>
-        </div>
-      </section>
-
-      <section className="mt-5 grid gap-5 xl:grid-cols-[0.8fr_1.2fr]">
-        <Surface id="social-add-friend" className="scroll-mt-6">
-          <div className="mb-5 flex items-center gap-3">
-            <UserPlus className="h-5 w-5 text-pulse" />
-            <h2 className="text-xl font-semibold text-dark">Find players</h2>
-          </div>
-          <div className="mb-5 rounded-xl border border-pulse/20 bg-pulse/8 p-4">
-            <p className="text-xs font-bold uppercase tracking-[0.16em] text-muted">Your username</p>
-            <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
-              <code className="min-w-0 flex-1 truncate rounded-lg bg-white/70 px-3 py-2 text-xs font-semibold text-dark">
-                {profileUsername ? `@${profileUsername}` : "Set your username in Settings"}
-              </code>
-              <Button type="button" variant="secondary" onClick={() => navigator.clipboard?.writeText(`@${profileUsername}`)} disabled={!profileUsername} className="w-full sm:w-auto">
-                <Copy className="h-4 w-4" />
-                Copy
+            <div className="flex gap-2">
+              <Button variant="ghost" onClick={() => jumpToSocialSection("friend-search")} className="border-white/20 bg-white/10 text-white hover:bg-white/20">
+                <UserPlus className="h-4 w-4" />
+                Add friend
+              </Button>
+              <Button onClick={() => jumpToSocialSection("share-status")} className="bg-cyan-400 text-slate-950 hover:bg-cyan-300">
+                <Activity className="h-4 w-4" />
+                Share status
               </Button>
             </div>
           </div>
-          <form onSubmit={searchFriends} className="grid gap-4">
-            <Field
-              label="Search username"
-              value={friendSearch}
-              onChange={(value) => setFriendSearch(normalizeUsername(value))}
-              placeholder="Search @username"
-            />
-            <Button type="submit" variant="pulse" disabled={searching || friendSearch.trim().length < 2}>
-              {searching ? "Searching..." : "Search"}
-            </Button>
-          </form>
 
-          <div className="mt-5 space-y-3">
-            {searchResults.map((result) => (
-              <div key={result.user_id} className="rounded-xl border border-line bg-white/70 p-4">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex min-w-0 items-center gap-3">
-                    <SocialAvatar src={result.avatar_url} name={result.display_name || result.username || "Friend"} />
-                    <div className="min-w-0">
-                      <p className="truncate font-semibold text-dark">@{result.username || "unknown"}</p>
-                      {result.display_name && <p className="mt-1 truncate text-sm text-muted">{result.display_name}</p>}
-                      <div className="mt-2 flex flex-wrap items-center gap-2">
-                        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">
-                          {getSearchStatusLabel(result)}
-                        </p>
-                        {result.golf_handicap !== null && result.golf_handicap !== undefined && (
-                          <span className="rounded-full bg-golf/10 px-2.5 py-1 text-xs font-bold text-golf">
-                            HCP {Number(result.golf_handicap).toFixed(1)}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  {result.relationship_direction === "none" ? (
-                    <Button type="button" variant="secondary" onClick={() => sendFriendRequestTo(result.user_id)} disabled={saving}>
-                      <UserPlus className="h-4 w-4" />
-                      Add
-                    </Button>
-                  ) : result.relationship_direction === "incoming" ? (
-                    <Button type="button" variant="secondary" onClick={() => acceptIncomingFromSearch(result.user_id)} disabled={saving}>
-                      <Check className="h-4 w-4" />
-                      Accept
-                    </Button>
-                  ) : (
-                    <span className={getConnectionClass((result.relationship_status || "pending") as FriendConnection["status"])}>
-                      {result.relationship_direction === "accepted" ? "friends" : "requested"}
-                    </span>
-                  )}
-                </div>
-              </div>
-            ))}
-            {friendSearch.length >= 2 && !searching && searchResults.length === 0 && (
-              <p className="rounded-xl border border-dashed border-line bg-white/45 p-4 text-sm text-muted">
-                No matching usernames yet.
-              </p>
-            )}
+          <div className="grid gap-3 sm:grid-cols-3">
+            <HeroStat label="Friends" value={acceptedCount.toString()} />
+            <HeroStat label="Live now" value={friendActivities.length.toString()} />
+            <HeroStat label="Requests" value={pendingCount.toString()} />
           </div>
+        </div>
+      </section>
 
-          <details className="mt-5 rounded-xl border border-line bg-white/70 p-4">
-            <summary className="cursor-pointer text-sm font-semibold text-dark">Backup friend code</summary>
-            <div className="mt-4 rounded-lg bg-cream p-3">
-              <p className="text-xs font-bold uppercase tracking-[0.16em] text-muted">Your backup code</p>
-              <code className="mt-2 block truncate text-xs font-semibold text-dark">{userId || "Loading..."}</code>
+      <Section title="Live now" action={<button onClick={() => jumpToSocialSection("friends-list")} className="text-sm font-bold text-cyan-600">View friends</button>}>
+        {liveNow.length ? (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {liveNow.map((activity) => (
+              <LiveNowCard key={activity.id} activity={activity} name={friendNameById.get(activity.user_id) || "Friend"} />
+            ))}
+          </div>
+        ) : (
+          <EmptyState title="No friends live right now" description="When friends start a round, check in at the gym, or share availability, they will appear here." />
+        )}
+      </Section>
+
+      <Section title="Friends on course" action={<Link href="/golf" className="text-sm font-bold text-cyan-600">Golf hub</Link>}>
+        {friendsOnCourse.length ? (
+          <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0">
+            {friendsOnCourse.map((activity, index) => (
+              <CourseFriendCard key={activity.id} activity={activity} name={friendNameById.get(activity.user_id) || "Friend"} index={index} />
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-[28px] border border-dashed border-border bg-muted/20 p-5 text-sm text-muted">
+            No friends are currently on course. Live rounds and practice updates will sit here first.
+          </div>
+        )}
+      </Section>
+
+      <Section title="Looking for">
+        <div className="grid gap-3 md:grid-cols-2">
+          <InviteCard
+            icon={Flag}
+            title="Find a fourball"
+            description="Friends who are free for a round or looking for players."
+            items={fourballInvites}
+            empty="No fourball invites yet."
+            names={friendNameById}
+          />
+          <InviteCard
+            icon={Dumbbell}
+            title="Find a gym partner"
+            description="Friends at the gym or open to training together."
+            items={gymInvites}
+            empty="No gym partner invites yet."
+            names={friendNameById}
+          />
+        </div>
+      </Section>
+
+      <Section title="Friends feed" action={<Link href="/round-history" className="text-sm font-bold text-cyan-600">Round history</Link>}>
+        {feedItems.length ? (
+          <div className="grid gap-3">
+            {feedItems.map((activity) => (
+              <FeedCard key={activity.id} activity={activity} name={friendNameById.get(activity.user_id) || "Friend"} />
+            ))}
+          </div>
+        ) : (
+          <EmptyState title="The feed is quiet" description="Completed rounds, PBs, practice notes, and cardio milestones from friends will appear here." />
+        )}
+      </Section>
+
+      <Section title="Friends" id="friends-list">
+        <div id="friend-search" className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+          <Surface className="space-y-4 p-5">
+            <div>
+              <h3 className="text-lg font-black text-foreground">Search by username</h3>
+              <p className="text-sm text-muted">Find friends by username. Friend codes can stay retired.</p>
             </div>
-            <form onSubmit={sendFriendRequest} className="mt-4 grid gap-3">
-              <Field label="Friend code" value={friendId} onChange={setFriendId} placeholder="Paste a backup friend code" />
-              <Button type="submit" variant="secondary" disabled={saving || !friendId.trim()}>
-                Send Request
+            <form onSubmit={searchFriends} className="flex flex-col gap-3 sm:flex-row">
+              <TextInput
+                value={friendSearch}
+                onChange={(event) => {
+                  setFriendSearch(event.target.value);
+                  void searchFriendsFromValue(event.target.value);
+                }}
+                placeholder="Search username"
+              />
+              <Button type="submit" disabled={saving}>
+                <Search className="h-4 w-4" />
+                Search
               </Button>
             </form>
-          </details>
-        </Surface>
+            {friendResults.length ? (
+              <div className="space-y-2">
+                {friendResults.map((result) => {
+                  const displayName = result.display_name || result.username || "AthletiGolf user";
+                  const connection = findConnectionForSearchResult(result);
 
-        <Surface id="social-friends" className="scroll-mt-6">
-          <div className="mb-5 flex items-center gap-3">
-            <Users className="h-5 w-5 text-pulse" />
-            <h2 className="text-xl font-semibold text-dark">Squad list</h2>
-          </div>
-          {connections.length ? (
-            <div className="space-y-5">
-              <ConnectionSection
-                title="Incoming requests"
-                empty="No incoming requests."
-                connections={incomingRequests}
-                userId={userId}
-                editingFriendId={editingFriendId}
-                friendLabel={friendLabel}
-                setFriendLabel={setFriendLabel}
-                onRename={startRename}
-                onSaveLabel={saveFriendLabel}
-                onCancelRename={() => setEditingFriendId("")}
-                action={(connection) => (
-                  <div className="flex flex-wrap gap-2">
-                    <Button type="button" variant="secondary" onClick={() => updateConnection(connection.id, "accepted")} disabled={saving}>
-                      <Check className="h-4 w-4" />Accept
-                    </Button>
-                    <Button type="button" variant="ghost" onClick={() => removeConnection(connection.id)} disabled={saving}>
-                      <X className="h-4 w-4" />Decline
-                    </Button>
+                  return (
+                  <div key={result.user_id} className="flex items-center justify-between gap-3 rounded-[22px] border border-border bg-background/70 p-3">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <SocialAvatar name={displayName} url={result.avatar_url} />
+                      <div className="min-w-0">
+                        <p className="truncate font-bold text-foreground">{displayName}</p>
+                        <p className="truncate text-xs text-muted">@{result.username || "user"}</p>
+                      </div>
+                    </div>
+                    <SearchResultAction
+                      result={result}
+                      saving={saving}
+                      onAdd={() => sendFriendRequestTo(result.user_id)}
+                      onAccept={() => acceptIncomingFromSearch(result)}
+                      onRemove={() => connection && removeConnection(connection.id)}
+                    />
                   </div>
-                )}
-              />
-              <ConnectionSection
-                title="Outgoing requests"
-                empty="No outgoing requests."
-                connections={outgoingRequests}
-                userId={userId}
-                editingFriendId={editingFriendId}
-                friendLabel={friendLabel}
-                setFriendLabel={setFriendLabel}
-                onRename={startRename}
-                onSaveLabel={saveFriendLabel}
-                onCancelRename={() => setEditingFriendId("")}
-                action={(connection) => (
-                  <Button type="button" variant="ghost" onClick={() => removeConnection(connection.id)} disabled={saving}>
-                    Cancel
-                  </Button>
-                )}
-              />
-              <ConnectionSection
-                title="Friends"
-                empty="No accepted friends yet."
-                connections={acceptedConnections}
-                userId={userId}
-                editingFriendId={editingFriendId}
-                friendLabel={friendLabel}
-                setFriendLabel={setFriendLabel}
-                onRename={startRename}
-                onSaveLabel={saveFriendLabel}
-                onCancelRename={() => setEditingFriendId("")}
-                action={(connection) => (
-                  <Button type="button" variant="ghost" onClick={() => removeConnection(connection.id)} disabled={saving}>
-                    Remove
-                  </Button>
-                )}
-              />
-            </div>
-          ) : (
-            <EmptyState title="No friend requests yet" description="The friend graph is ready, but you have not added anyone yet." />
-          )}
-        </Surface>
-      </section>
+                  );
+                })}
+              </div>
+            ) : null}
+          </Surface>
 
-      <section className="mt-5">
-        <Surface>
-          <div className="mb-5 flex items-center gap-3">
-            <ShieldCheck className="h-5 w-5 text-pulse" />
-            <h2 className="text-xl font-semibold text-dark">Visibility rules</h2>
-          </div>
-          <div className="grid gap-3 md:grid-cols-3">
-            <PrivacyCard title="Friends-only live feed" detail="Only accepted friends can see check-ins marked friends-only." />
-            <PrivacyCard title="Private mode stays private" detail="Private check-ins are saved for you without broadcasting to friends." />
-            <PrivacyCard title="You control status" detail="End or replace a check-in whenever your session changes." />
-          </div>
+          <Surface className="space-y-4 p-5">
+            <div>
+              <h3 className="text-lg font-black text-foreground">Quick request</h3>
+              <p className="text-sm text-muted">Send a request when you already know their username.</p>
+            </div>
+            <form onSubmit={sendFriendRequest} className="space-y-3">
+              <TextInput value={requestUsername} onChange={(event) => setRequestUsername(event.target.value)} placeholder="friend_username" />
+              <Button type="submit" disabled={saving || !requestUsername.trim()} className="w-full">
+                <UserPlus className="h-4 w-4" />
+                Send request
+              </Button>
+            </form>
+            {profileUsername ? (
+              <button
+                type="button"
+                onClick={() => navigator.clipboard?.writeText(profileUsername)}
+                className="flex w-full items-center justify-between rounded-[20px] border border-border bg-muted/30 px-3 py-2 text-left text-sm"
+              >
+                <span>
+                  Your username <b>@{profileUsername}</b>
+                </span>
+                <Copy className="h-4 w-4 text-muted" />
+              </button>
+            ) : null}
+          </Surface>
+        </div>
+
+        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+          <ConnectionSection
+            title="Requests"
+            empty="No pending requests."
+            connections={[...incomingRequests, ...outgoingRequests]}
+            userId={userId}
+            saving={saving}
+            editingConnectionId={editingConnectionId}
+            editingLabel={editingLabel}
+            setEditingLabel={setEditingLabel}
+            onAccept={(id) => updateConnection(id, "accepted")}
+            onRemove={removeConnection}
+            onStartRename={startRename}
+            onSaveLabel={saveFriendLabel}
+            onCancelRename={() => setEditingConnectionId(null)}
+          />
+          <ConnectionSection
+            title="Your friends"
+            empty="Accepted friends will appear here."
+            connections={acceptedConnections}
+            userId={userId}
+            saving={saving}
+            editingConnectionId={editingConnectionId}
+            editingLabel={editingLabel}
+            setEditingLabel={setEditingLabel}
+            onAccept={(id) => updateConnection(id, "accepted")}
+            onRemove={removeConnection}
+            onStartRename={startRename}
+            onSaveLabel={saveFriendLabel}
+            onCancelRename={() => setEditingConnectionId(null)}
+          />
+        </div>
+      </Section>
+
+      <Section title="Share status" id="share-status">
+        <Surface className="space-y-4 p-5">
+          {activeActivity ? (
+            <div className="rounded-[24px] border border-cyan-500/20 bg-cyan-500/10 p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.25em] text-cyan-700 dark:text-cyan-200">Currently shared</p>
+                  <h3 className="mt-1 text-lg font-black text-foreground">{getActivityLabel(activeActivity.activity_type)}</h3>
+                  <p className="text-sm text-muted">
+                    {activeActivity.location_name || "No location"} {activeActivity.detail ? `- ${activeActivity.detail}` : ""}
+                  </p>
+                </div>
+                <Button variant="ghost" onClick={endActivity} disabled={saving}>
+                  <X className="h-4 w-4" />
+                  End
+                </Button>
+              </div>
+            </div>
+          ) : null}
+
+          <form onSubmit={startActivity} className="grid gap-4 md:grid-cols-2">
+            <Field label="Status">
+              <SelectInput value={activityType} onChange={(event) => setActivityType(event.target.value as ActivityType)}>
+                {activityOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </SelectInput>
+            </Field>
+            <Field label="Visibility">
+              <SelectInput value={visibility} onChange={(event) => setVisibility(event.target.value as LiveActivity["visibility"])}>
+                <option value="friends">Friends</option>
+                <option value="private">Private</option>
+                <option value="team">Team</option>
+                <option value="public">Public</option>
+              </SelectInput>
+            </Field>
+            <Field label="Place">
+              <TextInput value={locationName} onChange={(event) => setLocationName(event.target.value)} placeholder="Course, gym, range..." />
+            </Field>
+            <Field label="Details">
+              <TextArea value={detail} onChange={(event) => setDetail(event.target.value)} placeholder="Looking for a fourth, pull day, front nine..." />
+            </Field>
+            <div className="md:col-span-2">
+              <Button type="submit" disabled={saving} className="w-full">
+                <Activity className="h-4 w-4" />
+                Share with friends
+              </Button>
+            </div>
+          </form>
         </Surface>
-      </section>
+      </Section>
     </main>
   );
 }
 
-function Field({
-  label,
-  value,
-  onChange,
-  placeholder,
+function Section({ title, action, id, children }: { title: string; action?: ReactNode; id?: string; children: ReactNode }) {
+  return (
+    <section id={id} className="space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-xl font-black text-foreground">{title}</h2>
+        {action}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function HeroStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-[24px] border border-white/10 bg-white/10 p-4">
+      <p className="text-xs font-black uppercase tracking-[0.25em] text-cyan-100/70">{label}</p>
+      <p className="mt-2 text-3xl font-black">{value}</p>
+    </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <label className="space-y-2">
+      <FieldLabel>{label}</FieldLabel>
+      {children}
+    </label>
+  );
+}
+
+function LiveNowCard({ activity, name }: { activity: LiveActivity; name: string }) {
+  const meta = activityMeta[activity.activity_type];
+  const Icon = meta.icon;
+
+  return (
+    <Surface className="p-4">
+      <div className="flex items-start gap-3">
+        <div className={`rounded-2xl p-3 ${meta.tone}`}>
+          <Icon className="h-5 w-5" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-black text-foreground">{name}</p>
+          <p className="text-sm font-bold text-muted">{meta.label}</p>
+          <p className="mt-1 line-clamp-2 text-sm text-muted">{activity.detail || activity.location_name || "Shared a live status."}</p>
+          <p className="mt-3 flex items-center gap-1 text-xs font-bold text-muted">
+            <Clock className="h-3.5 w-3.5" />
+            {formatRelativeTime(activity.started_at)}
+          </p>
+        </div>
+      </div>
+    </Surface>
+  );
+}
+
+function CourseFriendCard({ activity, name, index }: { activity: LiveActivity; name: string; index: number }) {
+  const progress = Math.min(18, Math.max(1, 3 + index * 2));
+  const score = index % 3 === 0 ? "E" : index % 3 === 1 ? "+2" : "-1";
+
+  return (
+    <Link
+      href="/social"
+      className="min-w-[230px] rounded-[28px] border border-emerald-500/20 bg-gradient-to-br from-emerald-500/15 to-cyan-500/10 p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <SocialAvatar name={name} />
+          <div>
+            <p className="font-black text-foreground">{name}</p>
+            <p className="text-xs font-bold text-muted">{activity.location_name || "On course"}</p>
+          </div>
+        </div>
+        <span className="rounded-full bg-emerald-500 px-2 py-1 text-xs font-black text-white">{score}</span>
+      </div>
+      <div className="mt-4">
+        <div className="flex items-center justify-between text-xs font-bold text-muted">
+          <span>Hole {progress}</span>
+          <span>{Math.round((progress / 18) * 100)}%</span>
+        </div>
+        <div className="mt-2 h-2 rounded-full bg-emerald-100 dark:bg-emerald-950">
+          <div className="h-full rounded-full bg-emerald-500" style={{ width: `${(progress / 18) * 100}%` }} />
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+function InviteCard({
+  icon: Icon,
+  title,
+  description,
+  items,
+  empty,
+  names,
 }: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  placeholder?: string;
+  icon: ComponentType<{ className?: string }>;
+  title: string;
+  description: string;
+  items: LiveActivity[];
+  empty: string;
+  names: Map<string, string>;
 }) {
   return (
-    <div>
-      <FieldLabel>{label}</FieldLabel>
-      <TextInput value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} />
-    </div>
-  );
-}
-
-function SocialMetric({ icon: Icon, label, value }: { icon: React.ComponentType<{ className?: string }>; label: string; value: React.ReactNode }) {
-  return (
-    <div className="rounded-2xl border border-[#d8e4ec] bg-white p-5 shadow-sm">
-      <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-pulse/10 text-pulse">
-        <Icon className="h-5 w-5" />
-      </span>
-      <p className="mt-4 text-sm font-medium text-muted">{label}</p>
-      <h2 className="mt-2 text-2xl font-semibold text-dark">{value}</h2>
-    </div>
-  );
-}
-
-function SocialHeroStat({ icon: Icon, label, value }: { icon: React.ComponentType<{ className?: string }>; label: string; value: React.ReactNode }) {
-  return (
-    <div className="rounded-2xl border border-[#d8e4ec] bg-[#f7fafc] p-4">
-      <div className="flex items-center gap-3">
-        <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-pulse/10 text-pulse">
+    <Surface className="p-5">
+      <div className="flex items-start gap-3">
+        <div className="rounded-2xl bg-cyan-500/15 p-3 text-cyan-700 dark:text-cyan-200">
           <Icon className="h-5 w-5" />
-        </span>
-        <div className="min-w-0">
-          <p className="text-xs font-bold uppercase tracking-[0.14em] text-muted">{label}</p>
-          <p className="mt-1 truncate text-lg font-semibold text-dark">{value}</p>
         </div>
-      </div>
-    </div>
-  );
-}
-
-function PrivacyCard({ title, detail }: { title: string; detail: string }) {
-  return (
-    <div className="rounded-xl border border-line bg-white/70 p-4">
-      <h3 className="font-semibold text-dark">{title}</h3>
-      <p className="mt-2 text-sm leading-relaxed text-muted">{detail}</p>
-    </div>
-  );
-}
-
-function ActivityRow({ activity, name }: { activity: LiveActivity; name?: string }) {
-  return (
-    <div className="rounded-xl border border-line bg-white/70 p-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <p className="font-semibold text-dark">{getActivityLabel(activity.activity_type)}</p>
-          <p className="mt-1 text-sm text-muted">
-            {activity.location_name || "No location"} {activity.detail ? `- ${activity.detail}` : ""}
-          </p>
-          <p className="mt-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted">
-            <Link href={`/social/friends/${activity.user_id}`} className="text-dark transition hover:text-pulse">
-              {name || `Friend ${activity.user_id.slice(0, 8)}`}
-            </Link>{" "}
-            - {formatRelativeTime(activity.started_at)}
-          </p>
+          <h3 className="text-lg font-black text-foreground">{title}</h3>
+          <p className="text-sm text-muted">{description}</p>
         </div>
-        <span className="w-fit rounded-full bg-pulse/10 px-3 py-1 text-xs font-bold text-pulse">Live</span>
       </div>
-    </div>
+      <div className="mt-4 space-y-2">
+        {items.length ? (
+          items.map((activity) => (
+            <div key={activity.id} className="flex items-center justify-between rounded-2xl bg-muted/30 px-3 py-2 text-sm">
+              <span className="font-bold text-foreground">{names.get(activity.user_id) || "Friend"}</span>
+              <span className="text-muted">{activity.detail || activity.location_name || "Available"}</span>
+            </div>
+          ))
+        ) : (
+          <p className="rounded-2xl bg-muted/30 px-3 py-3 text-sm text-muted">{empty}</p>
+        )}
+      </div>
+    </Surface>
+  );
+}
+
+function FeedCard({ activity, name }: { activity: LiveActivity; name: string }) {
+  const meta = activityMeta[activity.activity_type];
+  const Icon = meta.icon;
+  const summary =
+    activity.activity_type === "course"
+      ? "started a live round"
+      : activity.activity_type === "gym"
+        ? "checked in for training"
+        : activity.activity_type === "practice"
+          ? "shared a practice session"
+          : "is looking for company";
+
+  return (
+    <Surface className="p-4">
+      <div className="flex items-start gap-3">
+        <SocialAvatar name={name} />
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="font-black text-foreground">{name}</p>
+            <span className="text-sm text-muted">{summary}</span>
+          </div>
+          <p className="mt-1 text-sm text-muted">{activity.detail || activity.location_name || "No extra notes."}</p>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-black ${meta.tone}`}>
+              <Icon className="h-3.5 w-3.5" />
+              {meta.label}
+            </span>
+            <span className="text-xs font-bold text-muted">{formatRelativeTime(activity.started_at)}</span>
+          </div>
+        </div>
+        <div className="flex gap-1 text-muted">
+          <button className="rounded-full p-2 hover:bg-muted/40" type="button" aria-label="Like">
+            <Check className="h-4 w-4" />
+          </button>
+          <button className="rounded-full p-2 hover:bg-muted/40" type="button" aria-label="Comment">
+            <MessageCircle className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+    </Surface>
+  );
+}
+
+function SearchResultAction({
+  result,
+  saving,
+  onAdd,
+  onAccept,
+  onRemove,
+}: {
+  result: FriendSearchResult;
+  saving: boolean;
+  onAdd: () => void;
+  onAccept: () => void;
+  onRemove: () => void;
+}) {
+  if (result.relationship_status === "accepted") {
+    return (
+      <Button variant="ghost" onClick={onRemove} disabled={saving}>
+        <X className="h-4 w-4" />
+        Remove
+      </Button>
+    );
+  }
+
+  if (result.relationship_status === "pending" && result.relationship_direction === "incoming") {
+    return (
+      <Button onClick={onAccept} disabled={saving}>
+        <Check className="h-4 w-4" />
+        Accept
+      </Button>
+    );
+  }
+
+  if (result.relationship_status === "pending" && result.relationship_direction === "outgoing") {
+    return <span className="rounded-full bg-amber-500/15 px-3 py-1 text-xs font-black text-amber-700 dark:text-amber-200">Pending</span>;
+  }
+
+  return (
+    <Button onClick={onAdd} disabled={saving}>
+      <UserPlus className="h-4 w-4" />
+      Add
+    </Button>
   );
 }
 
@@ -705,142 +865,120 @@ function ConnectionSection({
   empty,
   connections,
   userId,
-  action,
-  editingFriendId,
-  friendLabel,
-  setFriendLabel,
-  onRename,
+  saving,
+  editingConnectionId,
+  editingLabel,
+  setEditingLabel,
+  onAccept,
+  onRemove,
+  onStartRename,
   onSaveLabel,
   onCancelRename,
 }: {
   title: string;
   empty: string;
   connections: FriendConnectionProfile[];
-  userId: string;
-  action: (connection: FriendConnectionProfile) => React.ReactNode;
-  editingFriendId: string;
-  friendLabel: string;
-  setFriendLabel: (value: string) => void;
-  onRename: (connection: FriendConnectionProfile) => void;
+  userId: string | null;
+  saving: boolean;
+  editingConnectionId: string | null;
+  editingLabel: string;
+  setEditingLabel: (value: string) => void;
+  onAccept: (id: string) => void;
+  onRemove: (id: string) => void;
+  onStartRename: (connection: FriendConnectionProfile) => void;
   onSaveLabel: (connection: FriendConnectionProfile) => void;
   onCancelRename: () => void;
 }) {
   return (
-    <div>
-      <h3 className="mb-3 text-sm font-bold uppercase tracking-[0.16em] text-muted">{title}</h3>
+    <Surface className="space-y-3 p-5">
+      <h3 className="text-lg font-black text-foreground">{title}</h3>
       {connections.length ? (
-        <div className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-white/70">
-          {connections.map((connection) => {
-            const otherId = getOtherUserId(connection, userId);
-            const label = getConnectionLabel(connection, userId);
-            const username = "other_username" in connection ? connection.other_username : null;
-            const avatarUrl = "other_avatar_url" in connection ? connection.other_avatar_url : null;
-            const handicap = "other_golf_handicap" in connection ? connection.other_golf_handicap : null;
-            return (
-              <div key={connection.id} className="grid gap-3 p-4 md:grid-cols-[1fr_120px_auto] md:items-center">
-                <div className="flex min-w-0 items-start gap-3">
-                  <SocialAvatar src={avatarUrl} name={label} />
-                  <div className="min-w-0 flex-1">
-                  {editingFriendId === connection.id ? (
-                    <div className="flex flex-col gap-2 sm:flex-row">
-                      <TextInput value={friendLabel} onChange={(event) => setFriendLabel(event.target.value)} placeholder="Friend nickname" />
-                      <Button type="button" variant="pulse" onClick={() => onSaveLabel(connection)}>
-                        Save
-                      </Button>
-                      <Button type="button" variant="ghost" onClick={onCancelRename}>
-                        Cancel
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="flex flex-wrap items-center gap-2">
-                      {connection.status === "accepted" ? (
-                        <Link href={`/social/friends/${otherId}`} className="font-semibold text-dark transition hover:text-pulse">
-                          {label}
-                        </Link>
-                      ) : (
-                        <h4 className="font-semibold text-dark">{label}</h4>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => onRename(connection)}
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted transition hover:bg-steel/10 hover:text-dark"
-                        aria-label={`Rename ${label}`}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </button>
-                    </div>
-                  )}
-                  <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted">
-                    {username && <span className="truncate">@{username}</span>}
-                    {handicap !== null && handicap !== undefined && (
-                      <span className="rounded-full bg-golf/10 px-2.5 py-1 text-xs font-bold text-golf">
-                        HCP {Number(handicap).toFixed(1)}
-                      </span>
-                    )}
-                  </div>
-                  <p className="mt-1 truncate text-xs text-muted">{otherId}</p>
+        connections.map((connection) => {
+          const label = userId ? getConnectionLabel(connection, userId) : connection.other_display_name || "Friend";
+          const isIncoming = userId ? connection.receiver_id === userId : false;
+          const isEditing = editingConnectionId === connection.id;
+
+          return (
+            <div key={connection.id} className="rounded-[22px] border border-border bg-background/70 p-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-3">
+                  <SocialAvatar name={label} url={connection.other_avatar_url} />
+                  <div className="min-w-0">
+                    <p className="truncate font-black text-foreground">{label}</p>
+                    <p className="truncate text-xs text-muted">
+                      @{connection.other_username || "friend"} {connection.other_golf_handicap != null ? `- HCP ${connection.other_golf_handicap}` : ""}
+                    </p>
                   </div>
                 </div>
-                <span className={getConnectionClass(connection.status)}>{connection.status}</span>
-                <div className="flex flex-wrap gap-2 md:justify-end">{action(connection)}</div>
+                <div className="flex items-center gap-1">
+                  {connection.status === "pending" && isIncoming ? (
+                    <Button className="px-3 py-2 text-xs" onClick={() => onAccept(connection.id)} disabled={saving}>
+                      <Check className="h-4 w-4" />
+                      Accept
+                    </Button>
+                  ) : null}
+                  <Button className="px-3 py-2 text-xs" variant="ghost" onClick={() => onStartRename(connection)} disabled={saving}>
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button className="px-3 py-2 text-xs" variant="ghost" onClick={() => onRemove(connection.id)} disabled={saving}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
-            );
-          })}
-        </div>
+              {isEditing ? (
+                <div className="mt-3 flex gap-2">
+                  <TextInput value={editingLabel} onChange={(event) => setEditingLabel(event.target.value)} placeholder="Nickname" />
+                  <Button className="px-3 py-2 text-xs" onClick={() => onSaveLabel(connection)} disabled={saving}>
+                    Save
+                  </Button>
+                  <Button className="px-3 py-2 text-xs" variant="ghost" onClick={onCancelRename}>
+                    Cancel
+                  </Button>
+                </div>
+              ) : null}
+            </div>
+          );
+        })
       ) : (
-        <p className="rounded-xl border border-dashed border-line bg-white/45 p-4 text-sm text-muted">{empty}</p>
+        <p className="rounded-2xl bg-muted/30 px-3 py-3 text-sm text-muted">{empty}</p>
       )}
+    </Surface>
+  );
+}
+
+function SocialAvatar({ name, url }: { name: string; url?: string | null }) {
+  if (url) {
+    return <img src={url} alt="" className="h-11 w-11 rounded-full object-cover" />;
+  }
+
+  return (
+    <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-cyan-400 to-emerald-400 text-sm font-black text-slate-950">
+      {name.slice(0, 1).toUpperCase()}
     </div>
   );
 }
 
-function SocialAvatar({ src, name }: { src?: string | null; name: string }) {
-  const initial = name.trim().charAt(0).toUpperCase() || "A";
-  return (
-    <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-pulse/15 bg-pulse/10 text-sm font-bold text-pulse">
-      {src ? <img src={src} alt="" className="h-full w-full object-cover" /> : initial}
-    </span>
-  );
+function getOtherUserId(connection: FriendConnectionProfile, currentUserId: string | null) {
+  if (!currentUserId) return connection.other_user_id || connection.receiver_id;
+  return connection.requester_id === currentUserId ? connection.receiver_id : connection.requester_id;
 }
 
-function getOtherUserId(connection: FriendConnection | FriendConnectionProfile, userId: string) {
-  return "other_user_id" in connection ? connection.other_user_id : connection.requester_id === userId ? connection.receiver_id : connection.requester_id;
+function getConnectionLabel(connection: FriendConnectionProfile, currentUserId: string | null) {
+  const ownLabel = currentUserId && connection.requester_id === currentUserId ? connection.requester_label : connection.receiver_label;
+  return ownLabel || connection.other_display_name || connection.other_username || "Friend";
 }
 
-function getConnectionLabel(connection: FriendConnection | FriendConnectionProfile, userId: string) {
-  const label = connection.requester_id === userId ? connection.requester_label : connection.receiver_label;
-  if (label) return label;
-  if ("other_display_name" in connection && connection.other_display_name) return connection.other_display_name;
-  if ("other_username" in connection && connection.other_username) return `@${connection.other_username}`;
-  return `Friend ${getOtherUserId(connection, userId).slice(0, 8)}`;
+function getActivityLabel(type: ActivityType) {
+  return activityMeta[type]?.label || "Live";
 }
 
-function getActivityLabel(activity: ActivityType) {
-  if (activity === "gym") return "At the gym";
-  if (activity === "course") return "On the course";
-  if (activity === "practice") return "Practicing";
-  return "Available";
-}
-
-function getConnectionClass(status: FriendConnection["status"]) {
-  const base = "w-fit rounded-full px-3 py-1 text-sm font-semibold";
-  if (status === "accepted") return `${base} bg-golf/10 text-golf`;
-  if (status === "blocked") return `${base} bg-danger/10 text-danger`;
-  return `${base} bg-gold/15 text-gold`;
-}
-
-function getSearchStatusLabel(result: FriendSearchResult) {
-  if (result.relationship_direction === "accepted") return "Already friends";
-  if (result.relationship_direction === "incoming") return "They sent you a request";
-  if (result.relationship_direction === "outgoing") return "Request sent";
-  return "Available to add";
-}
-
-function formatRelativeTime(value: string) {
-  const diffMinutes = Math.round((new Date(value).getTime() - Date.now()) / 60000);
-  const absolute = Math.abs(diffMinutes);
-  if (absolute < 1) return "just now";
-  if (absolute < 60) return diffMinutes < 0 ? `${absolute}m ago` : `in ${absolute}m`;
-  const hours = Math.round(absolute / 60);
-  return diffMinutes < 0 ? `${hours}h ago` : `in ${hours}h`;
+function formatRelativeTime(value?: string | null) {
+  if (!value) return "Just now";
+  const diff = Date.now() - new Date(value).getTime();
+  const minutes = Math.max(0, Math.round(diff / 60000));
+  if (minutes < 1) return "Just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.round(hours / 24)}d ago`;
 }
