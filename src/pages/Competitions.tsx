@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { CalendarDays, CheckCircle2, Edit3, Plus, Trophy, X } from "lucide-react";
+import ScoreBadge from "@/components/ScoreBadge";
 import { Button, ConfirmDialog, EmptyState, FieldLabel, PageHeader, SelectInput, Surface, TextArea, TextInput } from "@/components/ui";
 import { supabase } from "@/lib/supabase";
 import type { Competition } from "@/lib/types";
@@ -237,7 +238,7 @@ export default function Competitions() {
             <>
               <div className="mt-5 grid gap-3 sm:grid-cols-3">
                 <DarkMetric label="Date" value={formatDate(nextCompetition.competition_date)} />
-                <DarkMetric label="Target" value={nextCompetition.target_score || "-"} />
+                <DarkMetric label="Target" value={<ScoreBadge score={nextCompetition.target_score} />} />
                 <DarkMetric label="Focus" value={nextCompetition.focus_area || "Auto"} />
               </div>
               <PrepChecklist competition={nextCompetition} />
@@ -257,7 +258,7 @@ export default function Competitions() {
               </p>
               <div className="mt-4 grid gap-2 text-sm sm:grid-cols-3">
                 <DarkMetric label="Focus" value={todayCompetition.focus_area || "Course strategy"} />
-                <DarkMetric label="Target" value={todayCompetition.target_score || "-"} />
+                <DarkMetric label="Target" value={<ScoreBadge score={todayCompetition.target_score} />} />
                 <DarkMetric label="Start" value={todayCompetition.start_time || "TBC"} />
               </div>
             </div>
@@ -499,7 +500,7 @@ function ReviewCard({ competition, onUpdate }: { competition: Competition; onUpd
         <div>
           <h3 className="font-semibold text-dark">{competition.name}</h3>
           <p className="mt-1 text-sm text-muted">
-            {formatDate(competition.competition_date)} - score {competition.result_score || "-"}
+            {formatDate(competition.competition_date)} - score <ScoreBadge score={competition.result_score} size="sm" />
           </p>
         </div>
       </div>

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { Edit3, Eye, Flag, MessageCircle, Play, Trash2, X } from "lucide-react";
+import ScoreBadge from "@/components/ScoreBadge";
 import { Button, ConfirmDialog, EmptyState, FieldLabel, PageHeader, StatCard, Surface, TextArea, TextInput } from "@/components/ui";
 import { formatAverage, getGolfStats, isCompleteScoringRound } from "@/lib/golfStats";
 import { supabase } from "@/lib/supabase";
@@ -314,7 +315,7 @@ export default function RoundHistory() {
                     </p>
                   </div>
 
-                  <Metric label="Score" value={round.score?.toString() || "-"} />
+                  <Metric label="Score" value={<ScoreBadge score={round.score} scoreToPar={getRoundScoreToPar(round)} />} />
                   <Metric label="FIR" value={`${round.fairways_hit ?? "-"}/${round.fairways_possible ?? "-"}`} />
                   <Metric label="GIR" value={`${round.greens_in_regulation ?? "-"}/${round.holes_played ?? 18}`} />
                   <Metric label="Scramble" value={round.scramble_percentage === null ? "-" : `${round.scramble_percentage}%`} />
@@ -372,7 +373,7 @@ export default function RoundHistory() {
   );
 }
 
-function Metric({ label, value, danger = false }: { label: string; value: string; danger?: boolean }) {
+function Metric({ label, value, danger = false }: { label: string; value: React.ReactNode; danger?: boolean }) {
   return (
     <div>
       <p className="text-xs font-bold uppercase tracking-[0.14em] text-muted lg:hidden">{label}</p>
@@ -414,7 +415,7 @@ function RoundDetailsDrawer({
         <DrawerHeader eyebrow="Round Details" title={round.round_name || round.course || "Unknown Course"} onClose={onClose} />
 
         <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <DetailTile label="Score" value={round.score?.toString() || "-"} />
+          <DetailTile label="Score" value={<ScoreBadge score={round.score} scoreToPar={getRoundScoreToPar(round)} size="lg" />} />
           <DetailTile label="Holes" value={(round.holes_played ?? 18).toString()} />
           <DetailTile label="FIR" value={`${round.fairways_hit ?? "-"}/${round.fairways_possible ?? "-"}`} />
           <DetailTile label="GIR" value={`${round.greens_in_regulation ?? "-"}/${round.holes_played ?? 18}`} />
@@ -447,7 +448,7 @@ function RoundDetailsDrawer({
                   <tr key={hole.id} className="border-t border-line">
                     <td className="p-3 font-semibold">{hole.hole_number}</td>
                     <td className="p-3">{hole.par}</td>
-                    <td className="p-3">{hole.score ?? "-"}</td>
+                    <td className="p-3"><ScoreBadge score={hole.score} par={hole.par} size="sm" /></td>
                     <td className="p-3 capitalize">{formatCell(hole.fairway_result || "na")}</td>
                     <td className="p-3 capitalize">{formatCell(hole.tee_shot_location || "-")}</td>
                     <td className="p-3">{hole.gir ? "Yes" : "No"}</td>
@@ -520,7 +521,7 @@ function RoundEditDrawer({
         <DrawerHeader eyebrow="Edit Scorecard" title={title} onClose={onClose} />
 
         <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <DetailTile label="Score" value={stats.holesCompleted ? stats.totalScore.toString() : form.score || "-"} />
+          <DetailTile label="Score" value={<ScoreBadge score={stats.holesCompleted ? stats.totalScore : form.score || null} scoreToPar={stats.holesCompleted ? stats.totalScore - stats.totalPar : null} size="lg" />} />
           <DetailTile label="Holes" value={`${stats.holesCompleted}/${holes.length || form.holes_played || 18}`} />
           <DetailTile label="Putts" value={stats.holesCompleted ? stats.putts.toString() : form.putts || "-"} />
           <DetailTile label="Penalties" value={stats.holesCompleted ? stats.penalties.toString() : form.penalty_shots || "0"} danger={(stats.penalties || Number(form.penalty_shots || 0)) > 0} />
@@ -637,7 +638,7 @@ function DrawerHeader({ eyebrow, title, onClose }: { eyebrow: string; title: str
   );
 }
 
-function DetailTile({ label, value, danger = false }: { label: string; value: string; danger?: boolean }) {
+function DetailTile({ label, value, danger = false }: { label: string; value: React.ReactNode; danger?: boolean }) {
   return (
     <div className="rounded-xl border border-line bg-steel/5 p-4">
       <p className="text-xs font-bold uppercase tracking-[0.14em] text-muted">{label}</p>
@@ -753,6 +754,7 @@ function calculateHoleStats(holes: HoleForm[]) {
 
   return {
     holesCompleted: completed.length,
+    totalPar: completed.reduce((sum, hole) => sum + Number(hole.par || 4), 0),
     totalScore: completed.reduce((sum, hole) => sum + Number(hole.score || 0), 0),
     fairwaysHit: fairwayHoles.filter((hole) => hole.fairway_result === "hit").length,
     fairwaysPossible: fairwayHoles.length,
@@ -763,6 +765,11 @@ function calculateHoleStats(holes: HoleForm[]) {
     bunkers: completed.reduce((sum, hole) => sum + Number(hole.greenside_bunker_shots || 0), 0),
     scramblePercent: scrambleChances.length ? Math.round((successfulScrambles / scrambleChances.length) * 100) : null,
   };
+}
+
+function getRoundScoreToPar(round: Round) {
+  if (round.score === null || round.score === undefined || !round.par_total) return null;
+  return round.score - round.par_total;
 }
 
 function hasAnyHoleData(hole: HoleForm) {

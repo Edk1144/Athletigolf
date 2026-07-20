@@ -15,6 +15,7 @@ import {
   Users,
   X,
 } from "lucide-react";
+import ScoreBadge from "@/components/ScoreBadge";
 import { Button, EmptyState, FieldLabel, SelectInput, Surface, TextArea, TextInput } from "@/components/ui";
 import { supabase } from "@/lib/supabase";
 import type {
@@ -90,7 +91,7 @@ export default function Social() {
         .order("started_at", { ascending: false })
         .limit(50),
       supabase.rpc("get_friend_connections_with_profiles"),
-      supabase.from("profiles").select("username, onboarding").eq("id", user.id).maybeSingle(),
+      supabase.from("profiles").select("username, onboarding_data").eq("id", user.id).maybeSingle(),
     ]);
 
     if (activityResponse.error) {
@@ -108,7 +109,7 @@ export default function Social() {
     if (profileResponse.error) {
       setError(profileResponse.error.message);
     } else {
-      const onboarding = profileResponse.data?.onboarding as OnboardingData | null;
+      const onboarding = profileResponse.data?.onboarding_data as OnboardingData | null;
       setProfileUsername(profileResponse.data?.username || onboarding?.social?.username || null);
     }
 
@@ -431,7 +432,7 @@ export default function Social() {
         )}
       </Section>
 
-      <Section title="Friends on course" action={<Link href="/golf" className="text-sm font-bold text-cyan-600">Golf hub</Link>}>
+      <Section title="Friends on course" action={<Link href="/activity/golf" className="text-sm font-bold text-cyan-600">Golf hub</Link>}>
         {friendsOnCourse.length ? (
           <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0">
             {friendsOnCourse.map((activity, index) => (
@@ -703,6 +704,7 @@ function LiveNowCard({ activity, name }: { activity: LiveActivity; name: string 
 function CourseFriendCard({ activity, name, index }: { activity: LiveActivity; name: string; index: number }) {
   const progress = Math.min(18, Math.max(1, 3 + index * 2));
   const score = index % 3 === 0 ? "E" : index % 3 === 1 ? "+2" : "-1";
+  const scoreToPar = score === "E" ? 0 : Number(score);
 
   return (
     <Link
@@ -717,7 +719,7 @@ function CourseFriendCard({ activity, name, index }: { activity: LiveActivity; n
             <p className="text-xs font-bold text-muted">{activity.location_name || "On course"}</p>
           </div>
         </div>
-        <span className="rounded-full bg-emerald-500 px-2 py-1 text-xs font-black text-white">{score}</span>
+        <ScoreBadge score={score} scoreToPar={scoreToPar} size="sm" />
       </div>
       <div className="mt-4">
         <div className="flex items-center justify-between text-xs font-bold text-muted">

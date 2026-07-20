@@ -13,6 +13,7 @@ import {
   Users,
   Zap,
 } from "lucide-react";
+import ScoreBadge from "@/components/ScoreBadge";
 import { Button, EmptyState, SectionTitle, Surface } from "@/components/ui";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/lib/supabase";
@@ -342,7 +343,7 @@ function HomeMetric({
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   value: React.ReactNode;
-  detail: string;
+  detail: React.ReactNode;
   progress?: number;
   visual?: React.ReactNode;
   onClick: () => void;
@@ -414,7 +415,11 @@ function getNutritionTotals(entries: NutritionEntry[]) {
 function getTodayRoundDetail(rounds: Round[], todayIso: string) {
   const round = rounds.find((item) => isSameLocalIsoDate(item.date || item.created_at, todayIso));
   if (!round) return "Round logged today";
-  return `${round.score ?? "-"} at ${round.course || "Unknown course"}`;
+  return (
+    <>
+      <ScoreBadge score={round.score} scoreToPar={round.score !== null && round.par_total ? round.score - round.par_total : null} size="sm" /> at {round.course || "Unknown course"}
+    </>
+  );
 }
 
 function getTodayWorkoutDetail(workouts: Workout[], todayIso: string) {

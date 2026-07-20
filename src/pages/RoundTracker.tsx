@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { AlertTriangle, ArrowLeft, CheckCircle2, Flag, Flame, Handshake, MessageCircle, Save, Trophy, UserPlus, Users } from "lucide-react";
 import GolfCoursePicker from "@/components/GolfCoursePicker";
+import ScoreBadge from "@/components/ScoreBadge";
 import { Button, Card, PageHeader, StatCard } from "@/components/ui";
 import { useAuth } from "@/hooks/useAuth";
 import { todayIso } from "@/lib/dates";
@@ -1142,8 +1143,8 @@ export default function RoundTracker() {
         ) : (
           <>
             <section className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8">
-              <StatCard label="Score" value={stats.totalScore || "-"} tone="bg-white" />
-              <StatCard label="To Par" value={formatToPar(stats.scoreToPar)} tone="bg-white" />
+              <StatCard label="Score" value={<ScoreBadge score={stats.holesCompleted ? stats.totalScore : null} scoreToPar={stats.holesCompleted ? stats.scoreToPar : null} size="lg" />} tone="bg-white" />
+              <StatCard label="To Par" value={<ScoreBadge score={formatToPar(stats.scoreToPar)} scoreToPar={stats.holesCompleted ? stats.scoreToPar : null} size="lg" />} tone="bg-white" />
               <StatCard label="Holes" value={`${stats.holesCompleted}/${holesPlayed}`} tone="bg-white" />
               <StatCard label="Putts" value={stats.totalPutts || "-"} tone="bg-white" />
               <StatCard label="FIR" value={`${stats.fairwayPercent}%`} tone="bg-white" />
@@ -1159,9 +1160,12 @@ export default function RoundTracker() {
                     <p className="text-sm font-semibold uppercase tracking-[0.18em] text-golf">
                       Hole {currentHoleIndex + 1} of {holesPlayed}
                     </p>
-                    <h2 className="mt-2 text-4xl font-semibold">
-                      {currentHole.score ? formatToPar(currentHoleScore ?? 0) : "Not scored"}
-                    </h2>
+                    <div className="mt-2 flex items-center gap-3">
+                      <ScoreBadge score={currentHole.score || null} par={currentHole.par} size="lg" />
+                      <h2 className="text-4xl font-semibold">
+                        {currentHole.score ? formatToPar(currentHoleScore ?? 0) : "Not scored"}
+                      </h2>
+                    </div>
                     <p className="mt-2 text-sm text-muted">
                       Enter the live basics now. Slower detail can be cleaned up in the review step after the round.
                     </p>
@@ -1222,8 +1226,8 @@ export default function RoundTracker() {
                             </div>
                           </div>
                           <div className="text-right">
-                            <p className="text-lg font-semibold text-dark">{player.score ?? "-"}</p>
-                            <p className="text-xs font-bold text-golf">{player.toPar === null ? "-" : formatToParValue(player.toPar)}</p>
+                            <p className="flex justify-end"><ScoreBadge score={player.score} scoreToPar={player.toPar} /></p>
+                            <p className="mt-1 flex justify-end"><ScoreBadge score={player.toPar === null ? null : formatToParValue(player.toPar)} scoreToPar={player.toPar} size="sm" /></p>
                           </div>
                         </div>
                       ))}
@@ -1446,7 +1450,7 @@ export default function RoundTracker() {
                           <td className="p-4">{hole.handicap || "-"}</td>
                           <td className="p-4">
                             {hole.score ? (
-                              hole.score
+                              <ScoreBadge score={hole.score} par={hole.par} size="sm" />
                             ) : (
                               <span className="rounded-full bg-steel/10 px-3 py-1 text-xs font-semibold text-muted">
                                 Skipped

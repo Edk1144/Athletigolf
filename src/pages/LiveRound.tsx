@@ -13,6 +13,7 @@ import {
   ThumbsUp,
   Users,
 } from "lucide-react";
+import ScoreBadge from "@/components/ScoreBadge";
 import { Button, Card, EmptyState } from "@/components/ui";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/lib/supabase";
@@ -26,6 +27,7 @@ import type {
   RoundPlayer,
   RoundPlayerHole,
   RoundReaction,
+  RoundHole,
 } from "@/lib/types";
 
 type RoundTab = "leaderboard" | "info" | "feed";
@@ -48,6 +50,7 @@ export default function LiveRound() {
   const [, params] = useRoute("/golf/rounds/:roundId");
   const roundId = params?.roundId;
   const [round, setRound] = useState<Round | null>(null);
+  const [roundHoles, setRoundHoles] = useState<RoundHole[]>([]);
   const [players, setPlayers] = useState<RoundPlayer[]>([]);
   const [playerHoles, setPlayerHoles] = useState<RoundPlayerHole[]>([]);
   const [games, setGames] = useState<RoundGame[]>([]);
@@ -84,6 +87,7 @@ export default function LiveRound() {
       commentResult,
       reactionResult,
       mediaResult,
+      roundHoleResult,
     ] = await Promise.all([
       supabase.from("rounds").select("*").eq("id", roundId).maybeSingle(),
       supabase.from("round_players").select("*").eq("round_id", roundId).order("player_order"),
@@ -94,10 +98,12 @@ export default function LiveRound() {
       supabase.from("round_comments").select("*").eq("round_id", roundId).order("created_at", { ascending: false }),
       supabase.from("round_reactions").select("*").eq("round_id", roundId).order("created_at", { ascending: false }),
       supabase.from("round_media").select("*").eq("round_id", roundId).order("created_at", { ascending: false }),
+      supabase.from("round_holes").select("*").eq("round_id", roundId).order("hole_number", { ascending: true }),
     ]);
 
     if (roundResult.error) setError(roundResult.error.message);
     setRound((roundResult.data as Round) || null);
+    setRoundHoles((roundHoleResult.data as RoundHole[]) || []);
     setPlayers((playerResult.data as RoundPlayer[]) || []);
     setPlayerHoles((playerHoleResult.data as RoundPlayerHole[]) || []);
     setGames((gameResult.data as RoundGame[]) || []);
@@ -273,6 +279,7 @@ export default function LiveRound() {
             games={games}
             leaderRows={leaderRows}
             holesPlayed={holesPlayed}
+            roundHoles={roundHoles}
             expandedPlayerId={expandedPlayerId}
             onTogglePlayer={(playerId) => setExpandedPlayerId((current) => (current === playerId ? null : playerId))}
           />
@@ -314,6 +321,7 @@ function LeaderboardTab({
   games,
   leaderRows,
   holesPlayed,
+  roundHoles,
   expandedPlayerId,
   onTogglePlayer,
 }: {
@@ -326,6 +334,7 @@ function LeaderboardTab({
     toPar: number | null;
   }>;
   holesPlayed: number;
+  roundHoles: RoundHole[];
   expandedPlayerId: string | null;
   onTogglePlayer: (playerId: string) => void;
 }) {
@@ -371,8 +380,8 @@ function LeaderboardTab({
                     {row.player.tee_name ? ` / ${row.player.tee_name}` : ""}
                   </span>
                 </span>
-                <span className="text-right text-xl font-semibold">{row.total ?? "-"}</span>
-                <span className="text-right text-2xl font-black">{formatToPar(row.toPar)}</span>
+                <span className="flex justify-end"><ScoreBadge score={row.total} scoreToPar={row.toPar} /></span>
+                <span className="flex justify-end"><ScoreBadge score={formatToPar(row.toPar)} scoreToPar={row.toPar} /></span>
                 <span className="flex items-center justify-end gap-1 text-right text-lg font-semibold">
                   {row.holesComplete >= holesPlayed ? "F" : row.holesComplete}
                   {expandedPlayerId === row.player.id ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
@@ -380,7 +389,7 @@ function LeaderboardTab({
               </button>
 
               {expandedPlayerId === row.player.id && (
-                <ExpandedScorecard player={row.player} holes={row.holes} holesPlayed={holesPlayed} position={index + 1} total={row.total} />
+                <ExpandedScorecard player={row.player} holes={row.holes} roundHoles={roundHoles} holesPlayed={holesPlayed} position={index + 1} total={row.total} />
               )}
             </div>
           ))}
@@ -397,12 +406,14 @@ function LeaderboardTab({
 function ExpandedScorecard({
   player,
   holes,
+  roundHoles,
   holesPlayed,
   position,
   total,
 }: {
   player: RoundPlayer;
   holes: RoundPlayerHole[];
+  roundHoles: RoundHole[];
   holesPlayed: number;
   position: number;
   total: number | null;
@@ -414,8 +425,8 @@ function ExpandedScorecard({
   return (
     <div className="bg-golf px-3 pb-4">
       <div className="rounded-b-[1.75rem] bg-white p-4 shadow-lg">
-        <ScorecardNine label="Out" holes={front} playerHoles={holes} />
-        {back.length > 0 && <ScorecardNine label="In" holes={back} playerHoles={holes} />}
+        <ScorecardNine label="Out" holes={front} playerHoles={holes} roundHoles={roundHoles} />
+        {back.length > 0 && <ScorecardNine label="In" holes={back} playerHoles={holes} roundHoles={roundHoles} />}
         <div className="mt-4 grid grid-cols-3 gap-2 text-center">
           <SummaryTile label="Player" value={player.display_name} />
           <SummaryTile label="Score" value={`${total ?? "-"}/${totalNet || "-"}`} />
@@ -426,20 +437,30 @@ function ExpandedScorecard({
   );
 }
 
-function ScorecardNine({ label, holes, playerHoles }: { label: string; holes: number[]; playerHoles: RoundPlayerHole[] }) {
+function ScorecardNine({ label, holes, playerHoles, roundHoles }: { label: string; holes: number[]; playerHoles: RoundPlayerHole[]; roundHoles: RoundHole[] }) {
+  const grossTotal = sumNumericCells(playerHoles, holes, "gross_score");
+  const netTotal = sumNumericCells(playerHoles, holes, "net_score");
+  const parTotal = sumPar(roundHoles, holes);
+
   return (
     <div className="mb-3 overflow-hidden rounded-2xl border border-line">
       <ScorecardRow label="Hole" cells={holes.map(String)} endLabel={label} tone="header" />
       <ScorecardRow
         label="Score"
-        cells={holes.map((holeNumber) => String(playerHoles.find((hole) => hole.hole_number === holeNumber)?.gross_score ?? "-"))}
-        endLabel={sumCells(playerHoles, holes, "gross_score")}
+        cells={holes.map((holeNumber) => {
+          const score = playerHoles.find((hole) => hole.hole_number === holeNumber)?.gross_score ?? null;
+          return <ScoreBadge score={score} par={getHolePar(roundHoles, holeNumber)} size="sm" />;
+        })}
+        endLabel={<ScoreBadge score={grossTotal} par={parTotal} size="sm" />}
         tone="strong"
       />
       <ScorecardRow
         label="Net"
-        cells={holes.map((holeNumber) => String(playerHoles.find((hole) => hole.hole_number === holeNumber)?.net_score ?? "-"))}
-        endLabel={sumCells(playerHoles, holes, "net_score")}
+        cells={holes.map((holeNumber) => {
+          const score = playerHoles.find((hole) => hole.hole_number === holeNumber)?.net_score ?? null;
+          return <ScoreBadge score={score} par={getHolePar(roundHoles, holeNumber)} size="sm" />;
+        })}
+        endLabel={<ScoreBadge score={netTotal} par={parTotal} size="sm" />}
       />
       <ScorecardRow
         label="Pts"
@@ -457,19 +478,19 @@ function ScorecardRow({
   tone,
 }: {
   label: string;
-  cells: string[];
-  endLabel: string;
+  cells: ReactNode[];
+  endLabel: ReactNode;
   tone?: "header" | "strong";
 }) {
   return (
     <div className={`grid grid-cols-[4.2rem_repeat(9,minmax(0,1fr))_3rem] text-center text-xs ${tone === "header" ? "bg-golf text-white" : "bg-white"}`}>
       <span className="border-r border-line/60 px-2 py-2 text-left font-black">{label}</span>
       {cells.map((cell, index) => (
-        <span key={`${label}-${index}`} className={`border-r border-line/60 px-1 py-2 ${tone === "strong" && cell !== "-" ? "bg-sky-600 text-white" : ""}`}>
+        <span key={`${label}-${index}`} className="flex items-center justify-center border-r border-line/60 px-1 py-2">
           {cell}
         </span>
       ))}
-      <span className="px-1 py-2 font-black">{endLabel}</span>
+      <span className="flex items-center justify-center px-1 py-2 font-black">{endLabel}</span>
     </div>
   );
 }
@@ -731,4 +752,26 @@ function sumCells(holes: RoundPlayerHole[], holeNumbers: number[], field: "gross
 
   if (!values.length) return "-";
   return String(values.reduce((sum, value) => sum + value, 0));
+}
+
+function sumNumericCells(holes: RoundPlayerHole[], holeNumbers: number[], field: "gross_score" | "net_score") {
+  const values = holeNumbers
+    .map((holeNumber) => holes.find((hole) => hole.hole_number === holeNumber)?.[field])
+    .filter((value): value is number => typeof value === "number");
+
+  if (!values.length) return null;
+  return values.reduce((sum, value) => sum + value, 0);
+}
+
+function getHolePar(holes: RoundHole[], holeNumber: number) {
+  return holes.find((hole) => hole.hole_number === holeNumber)?.par ?? null;
+}
+
+function sumPar(holes: RoundHole[], holeNumbers: number[]) {
+  const values = holeNumbers
+    .map((holeNumber) => getHolePar(holes, holeNumber))
+    .filter((value): value is number => typeof value === "number");
+
+  if (!values.length) return null;
+  return values.reduce((sum, value) => sum + value, 0);
 }
