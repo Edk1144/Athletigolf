@@ -649,12 +649,19 @@ export default function Settings() {
 
           <SettingsAccordionItem
             id="connectedAccounts"
-            title="Connected Accounts"
-            description="Review integrations and beta data-source readiness."
+            title="Connected Apps"
+            description="Manage your connected services."
             openSection={openSection}
             onOpen={setOpenSection}
           >
             <div className="space-y-4">
+              <button
+                type="button"
+                onClick={() => navigate("/connected-apps")}
+                className="w-full rounded-2xl border border-pulse bg-pulse px-5 py-3 text-left text-sm font-black text-white transition hover:bg-pulse/90"
+              >
+                Manage Connections
+              </button>
               <PrivacyNote
                 icon={<Database className="h-5 w-5 text-pulse" />}
                 title="Food databases"

@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { Activity, ExternalLink, Footprints, Link2, Route, ShieldCheck, Timer, Trash2, Watch } from "lucide-react";
-import { Button, EmptyState, FieldLabel, PageHeader, SelectInput, StatCard, Surface, TextArea, TextInput } from "@/components/ui";
+import { Activity, Footprints, Route, ShieldCheck, Timer, Trash2 } from "lucide-react";
+import { Button, FieldLabel, PageHeader, SelectInput, StatCard, Surface, TextArea, TextInput } from "@/components/ui";
 import { todayIso } from "@/lib/dates";
 import { supabase } from "@/lib/supabase";
-import type { CardioSession, StravaConnection } from "@/lib/types";
+import { useStrava } from "@/hooks/useStrava";
+import type { CardioSession } from "@/lib/types";
 
 type CardioForm = {
   activity_type: CardioSession["activity_type"];
@@ -34,22 +35,18 @@ export default function Cardio() {
   const [form, setForm] = useState<CardioForm>(emptyForm);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [syncingStrava, setSyncingStrava] = useState(false);
-  const [stravaConnection, setStravaConnection] = useState<StravaConnection | null>(null);
   const [error, setError] = useState("");
-  const [stravaMessage, setStravaMessage] = useState("");
+  const [success, setSuccess] = useState(false);
+  
+  const { stravaConnection } = useStrava();
 
   useEffect(() => {
     loadPage();
   }, []);
 
-  useEffect(() => {
-    finishStravaCallback();
-  }, []);
-
   async function loadPage() {
     setLoading(true);
-    await Promise.all([loadSessions(), loadStravaConnection()]);
+    await loadSessions();
     setLoading(false);
   }
 
@@ -66,13 +63,6 @@ export default function Cardio() {
     } else {
       setSessions((data as CardioSession[]) || []);
     }
-  }
-
-  async function loadStravaConnection() {
-    const { data, error: connectionError } = await supabase
-      .rpc("get_strava_connection_status");
-
-    if (!connectionError) setStravaConnection(((data as StravaConnection[]) || [])[0] || null);
   }
 
   function update<K extends keyof CardioForm>(key: K, value: CardioForm[K]) {
@@ -110,80 +100,6 @@ export default function Cardio() {
     await loadSessions();
   }
 
-  async function finishStravaCallback() {
-    const params = new URLSearchParams(window.location.search);
-    const code = params.get("code");
-    const state = params.get("state");
-    const denied = params.get("error");
-    if (denied) {
-      setStravaMessage("Strava connection was cancelled.");
-      window.history.replaceState({}, document.title, window.location.pathname);
-      return;
-    }
-    if (!code || state !== "athletigolf-cardio") return;
-
-    setSyncingStrava(true);
-    setError("");
-    setStravaMessage("Connecting Strava...");
-    window.history.replaceState({}, document.title, window.location.pathname);
-
-    const { error: connectError } = await supabase.functions.invoke("strava-oauth", { body: { code } });
-    if (connectError) {
-      setError(connectError.message || "Could not connect Strava.");
-      setStravaMessage("");
-      setSyncingStrava(false);
-      return;
-    }
-
-    setStravaMessage("Strava connected. Importing recent runs, walks and hikes...");
-    await importStravaActivities();
-    setSyncingStrava(false);
-  }
-
-  async function importStravaActivities() {
-    setSyncingStrava(true);
-    setError("");
-    setStravaMessage("");
-
-    const { data, error: importError } = await supabase.functions.invoke("strava-import");
-    if (importError) {
-      setError(importError.message || "Could not import Strava activities.");
-      setSyncingStrava(false);
-      return;
-    }
-
-    const imported = typeof data?.imported === "number" ? data.imported : 0;
-    const scanned = typeof data?.scanned === "number" ? data.scanned : 0;
-    const skippedUnsupported = typeof data?.skippedUnsupported === "number" ? data.skippedUnsupported : 0;
-    const activityTypes = Array.isArray(data?.activityTypes) ? data.activityTypes.filter(Boolean).join(", ") : "";
-    if (imported) {
-      setStravaMessage(`Imported ${imported} recent Strava run/walk/hike activities.`);
-    } else if (scanned > 0 && skippedUnsupported > 0) {
-      setStravaMessage(`Strava returned ${scanned} recent activities, but none were runs, walks or hikes${activityTypes ? ` (${activityTypes})` : ""}.`);
-    } else {
-      setStravaMessage("No recent Strava runs, walks or hikes were returned. If your activities are private, disconnect and reconnect Strava so AthletiGolf can request private activity read access.");
-    }
-    await Promise.all([loadSessions(), loadStravaConnection()]);
-    setSyncingStrava(false);
-  }
-
-  async function disconnectStrava() {
-    const confirmed = window.confirm("Disconnect Strava from AthletiGolf?");
-    if (!confirmed) return;
-
-    setSyncingStrava(true);
-    setError("");
-    const { error: disconnectError } = await supabase.functions.invoke("strava-disconnect");
-    if (disconnectError) {
-      setError(disconnectError.message || "Could not disconnect Strava.");
-      setSyncingStrava(false);
-      return;
-    }
-    setStravaConnection(null);
-    setStravaMessage("Strava disconnected. Imported activity rows already saved in AthletiGolf remain private unless you delete them.");
-    setSyncingStrava(false);
-  }
-
   async function deleteSession(id: string) {
     setError("");
     const { error: deleteError } = await supabase.from("cardio_sessions").delete().eq("id", id);
@@ -195,7 +111,6 @@ export default function Cardio() {
   }
 
   const stats = useMemo(() => getCardioStats(sessions), [sessions]);
-  const stravaHref = getStravaAuthorizeUrl();
 
   if (loading) {
     return (
@@ -212,22 +127,6 @@ export default function Cardio() {
         title="Cardio"
         description="Track running and walking volume, import private Strava runs/walks/hikes, and keep aerobic work visible."
         tone="text-lab"
-        actions={
-          stravaConnection ? (
-            <Button type="button" variant="secondary" onClick={importStravaActivities} disabled={syncingStrava}>
-              <ExternalLink className="h-4 w-4" />
-              {syncingStrava ? "Syncing..." : "Sync Strava"}
-            </Button>
-          ) : stravaHref ? (
-            <a
-              href={stravaHref}
-              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-[#fc4c02] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#e44602]"
-            >
-              <Link2 className="h-4 w-4" />
-              Connect Strava
-            </a>
-          ) : undefined
-        }
       />
 
       <section className="mb-5 grid gap-4 md:grid-cols-4">
@@ -281,170 +180,45 @@ export default function Cardio() {
               </Button>
             </form>
           </Surface>
-
-          <Surface className="bg-dark text-white">
-            <div className="flex items-start gap-3">
-              <span className="inline-flex h-11 w-11 items-center justify-center rounded-lg bg-[#fc4c02]/20 text-[#fc4c02]">
-                <Watch className="h-5 w-5" />
-              </span>
-              <div>
-                <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#fc4c02]">Strava</p>
-                <h2 className="mt-1 text-2xl font-semibold">
-                  {stravaConnection ? "Connected device sync" : "Device sync layer"}
-                </h2>
-                <p className="mt-3 text-sm leading-relaxed text-white/65">
-                  Strava can import runs, walks and hikes from watches. Imported data stays private to the connected user and is not used for AthletiAI, social sharing or cross-user analytics.
-                </p>
-              </div>
-            </div>
-
-            {stravaConnection && (
-              <div className="mt-5 rounded-lg border border-[#fc4c02]/25 bg-[#fc4c02]/10 p-4">
-                <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#fc4c02]">Connected account</p>
-                <p className="mt-2 font-semibold text-white">
-                  {stravaConnection.athlete_name || `Strava athlete ${stravaConnection.athlete_id}`}
-                </p>
-                <p className="mt-1 text-sm text-white/60">
-                  Last imported: {stravaConnection.last_imported_at ? formatDateTime(stravaConnection.last_imported_at) : "Not imported yet"}
-                </p>
-              </div>
-            )}
-
-            <div className="mt-5 grid gap-3 sm:grid-cols-3">
-              <DarkCard title="Consent" detail="Users connect with OAuth and can disconnect or request deletion." />
-              <DarkCard title="Scope" detail="Request activity read access needed for private run, walk and hike imports." />
-              <DarkCard title="Privacy" detail="Imported Strava data is shown only to the connected user." />
-            </div>
-
-            <div className="mt-5 rounded-lg border border-white/10 bg-white/8 p-4">
-              <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#fc4c02]">Compliance note</p>
-              <p className="mt-2 text-sm leading-relaxed text-white/65">
-                AthletiGolf should not train, tune, evaluate or ground AI systems with Strava data. It should not share Strava-derived activity data with friends or use it for cross-user analytics. Webhooks should be added before production sync so deauthorization, privacy changes and deleted activities are reflected promptly.
-              </p>
-            </div>
-
-            {stravaMessage && (
-              <p className="mt-5 rounded-lg border border-white/10 bg-white/8 p-3 text-sm font-semibold text-white/75">
-                {stravaMessage}
-              </p>
-            )}
-
-            {stravaConnection ? (
-              <div className="mt-5 flex flex-wrap gap-3">
-                <Button type="button" variant="gold" onClick={importStravaActivities} disabled={syncingStrava}>
-                  <ExternalLink className="h-4 w-4" />
-                  {syncingStrava ? "Syncing..." : "Import recent activities"}
-                </Button>
-                <Button type="button" variant="secondary" onClick={disconnectStrava} disabled={syncingStrava} className="border-white/15 bg-white/10 text-white hover:bg-white/15">
-                  Disconnect
-                </Button>
-              </div>
-            ) : stravaHref ? (
-              <a
-                href={stravaHref}
-                className="mt-5 inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-[#fc4c02] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#e44602]"
-              >
-                <ExternalLink className="h-4 w-4" />
-                Connect Strava
-              </a>
-            ) : (
-              <p className="mt-5 rounded-lg border border-white/10 bg-white/8 p-3 text-sm text-white/65">
-                Add `VITE_STRAVA_CLIENT_ID` to enable the Strava connect button. The Edge Functions also need `STRAVA_CLIENT_ID` and `STRAVA_CLIENT_SECRET`.
-              </p>
-            )}
-          </Surface>
         </div>
-
         <div className="space-y-5">
-          <Surface>
-            <div className="mb-5 grid gap-3 sm:grid-cols-[1fr_auto] sm:items-center">
-              <div>
-                <p className="text-xs font-bold uppercase tracking-[0.18em] text-muted">Recent Cardio</p>
-                <h2 className="text-xl font-semibold text-dark">Runs and walks</h2>
-              </div>
-              <span className="inline-flex w-fit items-center gap-2 rounded-full bg-lab/10 px-3 py-1 text-xs font-bold text-lab">
-                <Route className="h-3.5 w-3.5" />
-                {formatNumber(stats.totalDistance)} km app total
-              </span>
-            </div>
-
-            {sessions.length ? (
-              <div className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-white">
-                {sessions.map((session) => (
-                  <article key={session.id} className="grid gap-3 p-4 md:grid-cols-[1fr_auto] md:items-center">
+            <Surface>
+                <div className="mb-5 grid gap-3 sm:grid-cols-[1fr_auto] sm:items-center">
                     <div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="font-semibold text-dark">{getActivityLabel(session.activity_type)}</h3>
-                        <span className="rounded-full bg-steel/7 px-2.5 py-1 text-xs font-semibold text-muted">
-                          {session.source === "strava" ? "Strava" : "Manual"}
-                        </span>
-                      </div>
-                      <p className="mt-1 text-sm text-muted">
-                        {formatDate(session.session_date)}
-                        {session.route_name ? ` - ${session.route_name}` : ""}
-                      </p>
-                      {session.notes && <p className="mt-2 text-sm leading-relaxed text-muted">{session.notes}</p>}
-                      <div className="mt-3 grid gap-2 text-sm sm:grid-cols-4">
-                        <Mini label="Distance" value={`${formatNumber(session.distance_km || 0)} km`} />
-                        <Mini label="Time" value={`${session.duration_minutes || 0} min`} />
-                        <Mini label="Pace" value={formatPace(session.distance_km, session.duration_minutes)} />
-                        <Mini label="HR" value={session.avg_heart_rate ? `${session.avg_heart_rate} bpm` : "-"} />
-                      </div>
-                      {session.source === "strava" && session.external_id && (
-                        <a
-                          href={`https://www.strava.com/activities/${session.external_id}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="mt-3 inline-flex text-sm font-bold text-[#fc4c02] underline"
-                        >
-                          View on Strava
-                        </a>
-                      )}
+                        <p className="text-xs font-bold uppercase tracking-[0.18em] text-muted">Recent Cardio</p>
+                        <h2 className="text-xl font-semibold text-dark">Runs and walks</h2>
                     </div>
-                    <Button type="button" variant="ghost" onClick={() => deleteSession(session.id)}>
-                      <Trash2 className="h-4 w-4" />
-                      Delete
-                    </Button>
-                  </article>
-                ))}
-              </div>
-            ) : (
-              <EmptyState
-                title="No cardio yet"
-                description="Log a run or walk to start tracking easy aerobic volume alongside strength and wellness."
-              />
-            )}
-          </Surface>
-
-          <Surface>
-            <div className="mb-5 flex items-center gap-3">
-              <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-pulse/10 text-pulse">
-                <Timer className="h-5 w-5" />
-              </span>
-              <div>
-                <p className="text-xs font-bold uppercase tracking-[0.18em] text-muted">Read</p>
-                <h2 className="text-xl font-semibold text-dark">Cardio balance</h2>
-              </div>
-            </div>
-            <div className="grid gap-3 md:grid-cols-3">
-              <Advice title="Easy runs" detail="Keep most running conversational so it supports training instead of stealing recovery." />
-              <Advice title="Walking" detail="Useful for low-cost volume, recovery days and keeping daily movement honest." />
-              <Advice title="Golf transfer" detail="Better aerobic base can help late-round focus, walking endurance and recovery between sessions." />
-            </div>
-            <div className="mt-5 rounded-xl border border-pulse/20 bg-pulse/8 p-4">
-              <div className="flex items-start gap-3">
-                <ShieldCheck className="mt-0.5 h-5 w-5 text-pulse" />
-                <p className="text-sm leading-relaxed text-muted">
-                  These balance notes use your private cardio total, including Strava imports. Strava-derived activity data should still stay out of social sharing, AthletiAI and cross-user analytics.
-                </p>
-              </div>
-            </div>
-          </Surface>
+                </div>
+            </Surface>
+            
+            <Surface>
+                <div className="mb-5 flex items-center gap-3">
+                    <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-pulse/10 text-pulse">
+                        <Timer className="h-5 w-5" />
+                    </span>
+                    <div>
+                        <p className="text-xs font-bold uppercase tracking-[0.18em] text-muted">Integrations</p>
+                        <h2 className="text-xl font-semibold text-dark">Strava</h2>
+                    </div>
+                </div>
+                
+                <div className="flex items-center justify-between">
+                    <p className="text-sm text-muted">
+                        {stravaConnection ? "Connected ✓" : "Not connected"}
+                    </p>
+                    {!stravaConnection && (
+                        <Button variant="secondary" onClick={() => window.location.href = "/connected-apps"}>
+                            Manage in Connected Apps
+                        </Button>
+                    )}
+                </div>
+            </Surface>
         </div>
       </section>
     </main>
   );
 }
+
 
 function Field({
   label,
@@ -467,33 +241,6 @@ function Field({
   );
 }
 
-function Mini({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-lg border border-line bg-cream px-3 py-2">
-      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">{label}</p>
-      <p className="mt-1 font-semibold text-dark">{value}</p>
-    </div>
-  );
-}
-
-function DarkCard({ title, detail }: { title: string; detail: string }) {
-  return (
-    <div className="rounded-lg border border-white/10 bg-white/8 p-3">
-      <p className="font-semibold text-white">{title}</p>
-      <p className="mt-1 text-sm leading-relaxed text-white/58">{detail}</p>
-    </div>
-  );
-}
-
-function Advice({ title, detail }: { title: string; detail: string }) {
-  return (
-    <div className="rounded-xl border border-line bg-white/70 p-4">
-      <h3 className="font-semibold text-dark">{title}</h3>
-      <p className="mt-2 text-sm leading-relaxed text-muted">{detail}</p>
-    </div>
-  );
-}
-
 function getCardioStats(sessions: CardioSession[]) {
   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
   const weekSessions = sessions.filter((session) => new Date(session.session_date) >= weekAgo);
@@ -509,27 +256,6 @@ function getCardioStats(sessions: CardioSession[]) {
   };
 }
 
-function getStravaAuthorizeUrl() {
-  const clientId = import.meta.env.VITE_STRAVA_CLIENT_ID as string | undefined;
-  if (!clientId) return "";
-
-  const redirect = `${window.location.origin}/fitness/cardio`;
-  const params = new URLSearchParams({
-    client_id: clientId,
-    response_type: "code",
-    redirect_uri: redirect,
-    approval_prompt: "auto",
-    scope: "read,activity:read_all",
-    state: "athletigolf-cardio",
-  });
-
-  return `https://www.strava.com/oauth/authorize?${params.toString()}`;
-}
-
-function getActivityLabel(activity: CardioSession["activity_type"]) {
-  return activity === "walk" ? "Walk" : "Run";
-}
-
 function formatPace(distance?: number | null, minutes?: number | null) {
   if (!distance || !minutes) return "-";
   const pace = minutes / distance;
@@ -540,19 +266,6 @@ function formatPace(distance?: number | null, minutes?: number | null) {
 
 function formatNumber(value: number) {
   return Number.isInteger(value) ? value.toString() : value.toFixed(1);
-}
-
-function formatDate(value: string) {
-  return new Date(value).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
-}
-
-function formatDateTime(value: string) {
-  return new Date(value).toLocaleString("en-GB", {
-    day: "2-digit",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
 }
 
 function parseNumber(value: string) {

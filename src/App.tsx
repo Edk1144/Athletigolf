@@ -26,6 +26,7 @@ import SubmitSession from "@/pages/SubmitSession";
 import ExerciseDetail from "@/pages/ExerciseDetail";
 import ExerciseLibrary from "@/pages/ExerciseLibrary";
 import Cardio from "@/pages/Cardio";
+import StravaCallback from "@/pages/StravaCallback";
 import GymQuiz from "@/pages/GymQuiz";
 import GolfQuiz from "@/pages/GolfQuiz";
 import RoundTracker from "@/pages/RoundTracker";
@@ -47,6 +48,7 @@ import Settings from "./pages/Settings";
 import Contact from "./pages/Contact";
 import Follow from "./pages/Follow";
 import AdminFeedback from "./pages/AdminFeedback";
+import ConnectedApps from "./pages/ConnectedApps";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -346,6 +348,18 @@ function AppShell() {
 <Route path="/admin/feedback">
   <ProtectedRoute>
     <AdminFeedback />
+  </ProtectedRoute>
+</Route>
+
+<Route path="/connected-apps">
+  <ProtectedRoute>
+    <ConnectedApps />
+  </ProtectedRoute>
+</Route>
+
+<Route path="/strava-callback">
+  <ProtectedRoute>
+    <StravaCallback />
   </ProtectedRoute>
 </Route>
 

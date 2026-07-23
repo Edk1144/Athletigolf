@@ -58,6 +58,7 @@ export default function AppMore() {
       <MoreSection title="App" />
       <div className="border-b border-black/5 bg-white dark:border-white/10 dark:bg-[#102437]">
         <MoreRow icon={Settings} label="Settings" onClick={() => navigate("/settings")} />
+        <MoreRow icon={Database} label="Connected Apps" onClick={() => navigate("/connected-apps")} />
         <MoreRow icon={CreditCard} label="Memberships" detail="Plans and access" onClick={() => navigate("/memberships")} />
         <MoreRow icon={Instagram} label="Follow AthletiGolf" onClick={() => navigate("/follow")} />
       </div>

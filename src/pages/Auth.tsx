@@ -64,7 +64,19 @@ export default function AuthPage() {
         setPassword("");
       }
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Authentication failed";
+      console.error("Signup error:", err);
+      let message = "Authentication failed";
+
+      const error = err as { code?: string; message?: string };
+
+      if (error?.code === '23505') {
+        message = "Username already taken. Please choose another one.";
+      } else if (err instanceof Error) {
+        message = err.message;
+      } else if (typeof err === 'object' && err !== null && 'message' in err) {
+        message = String((err as { message: unknown }).message);
+      }
+
       setError(message);
     } finally {
       setLoading(false);
