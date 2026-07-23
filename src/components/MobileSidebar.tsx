@@ -15,6 +15,7 @@ import {
   History,
   Instagram,
   LayoutDashboard,
+  Link2,
   Mail,
   Menu,
   NotebookPen,
@@ -154,6 +155,7 @@ export default function MobileSidebar() {
           trainingOnly={trainingOnly}
           golfEnabled={golfEnabled}
           role={role}
+          isDesktop={true}
         />
       </aside>
 
@@ -239,6 +241,7 @@ function NavContent({
   golfEnabled,
   role,
   closeButton,
+  isDesktop = false,
 }: {
   trainingOpen: boolean;
   setTrainingOpen: (value: boolean) => void;
@@ -250,10 +253,16 @@ function NavContent({
   golfEnabled: boolean;
   role: string;
   closeButton?: React.ReactNode;
+  isDesktop?: boolean;
 }) {
-  const visibleMainLinks = trainingOnly
+  const baseMainLinks = trainingOnly
     ? mainLinks.filter((item) => item.href !== "/analytics")
     : mainLinks;
+  
+  const visibleMainLinks = isDesktop 
+    ? [...baseMainLinks, { href: "/connected-apps", label: "Connected Apps", icon: Link2, tone: "pulse" }]
+    : baseMainLinks;
+    
   const visibleSupportLinks = supportLinks.filter((item) => !item.adminOnly || role === "admin");
 
   return (

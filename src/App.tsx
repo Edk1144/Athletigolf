@@ -49,6 +49,7 @@ import Contact from "./pages/Contact";
 import Follow from "./pages/Follow";
 import AdminFeedback from "./pages/AdminFeedback";
 import ConnectedApps from "./pages/ConnectedApps";
+import AccountConnected from "./pages/AccountConnected";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -355,6 +356,10 @@ function AppShell() {
   <ProtectedRoute>
     <ConnectedApps />
   </ProtectedRoute>
+</Route>
+
+<Route path="/account-connected">
+  <AccountConnected />
 </Route>
 
 <Route path="/strava-callback">
